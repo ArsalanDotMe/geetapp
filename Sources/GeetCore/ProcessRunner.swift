@@ -91,13 +91,17 @@ private final class ProcessOperation: @unchecked Sendable {
         var environment = ProcessInfo.processInfo.environment
         environment["PATH"] = "\(executable.deletingLastPathComponent().path):/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
         process.environment = environment
+        let exit = ProcessExit()
+        process.terminationHandler = { _ in Task { await exit.finish() } }
         try launch(process)
         let deadline = Task { try? await Task.sleep(for: .seconds(60)); if !Task.isCancelled { self.cancel(timeout: true) } }
         defer { deadline.cancel() }
         let stdout = Task.detached(priority: .utility) { try self.read(output.fileHandleForReading, maximum: 16 * 1024 * 1024) }
         let stderr = Task.detached(priority: .utility) { try self.read(error.fileHandleForReading, maximum: 256 * 1024) }
-        // execute runs off the main actor. Pipe draining runs concurrently to avoid deadlock.
-        await Task.detached(priority: .utility) { process.waitUntilExit() }.value
+        // Install before launch so even a helper that exits immediately is observed.
+        // This avoids a blocking Foundation run loop on a cooperative executor.
+        await exit.wait()
+        process.terminationHandler = nil
         let bytes = try await stdout.value, errors = try await stderr.value
         let state = cancellationState()
         if state.1 { throw GeetError.message("YouTube took too long to respond. Try again in a moment.") }
@@ -125,4 +129,15 @@ private final class ProcessOperation: @unchecked Sendable {
         }
         return data
     }
+}
+
+private actor ProcessExit {
+    private var finished = false
+    private var waiter: CheckedContinuation<Void, Never>?
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            if finished { continuation.resume() } else { waiter = continuation }
+        }
+    }
+    func finish() { finished = true; waiter?.resume(); waiter = nil }
 }

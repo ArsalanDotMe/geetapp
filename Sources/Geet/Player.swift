@@ -23,7 +23,7 @@ final class Player: ObservableObject {
     @Published var repeatMode: RepeatMode = .off
     @Published var volume: Float = 0.8 { didSet { media?.volume = volume } }
     let clock = PlayerClock()
-    var automaticCache = false
+    var automaticCache = false { didSet { server?.retaining = automaticCache && offlineEnabled } }
     var offlineEnabled = false
     var onSnapshot: ((String, Int, Double) -> Void)?
     var onConfiguration: (() -> Void)?
@@ -33,13 +33,16 @@ final class Player: ObservableObject {
     private var queue = PlaybackQueue()
     private var position = 0.0
     private var duration = 0.0
+    private var pendingSeek: (id: UUID, target: Double)?
     private var visible = false
     private var periodic: Any?
     private var statusObservation: NSKeyValueObservation?
+    private var durationObservation: NSKeyValueObservation?
     private var controlObservation: NSKeyValueObservation?
     private var endObserver: NSObjectProtocol?
     private var stallObserver: NSObjectProtocol?
-    private var loader: MediaResourceLoader?
+    private var server: AudioStreamServer?
+    var usesOfflineAudio: Bool { server?.offline == true }
     private var resolveTask: Task<Void, Never>?
     private var lookAhead: Task<Void, Never>?
     private var idleTimer: DispatchSourceTimer?
@@ -53,7 +56,7 @@ final class Player: ObservableObject {
     private var nowPlayingArtwork: MPMediaItemArtwork?
     private var commands: [(MPRemoteCommand, Any)] = []
     var hasProgressObserver: Bool { periodic != nil }
-    var hasMediaPipeline: Bool { media != nil }
+    var hasMediaPipeline: Bool { media != nil || server != nil }
     var currentIndex: Int? { queue.current }
 
     init(resolver: Resolver, cache: MediaCache, idleDelay: TimeInterval = 600, mediaCommands: Bool = true) {
@@ -97,6 +100,15 @@ final class Player: ObservableObject {
             if visible { startProgressObserver() }; publishNowPlaying(); prefetchNext()
         } else { load(track, at: position) }
     }
+    func stop() {
+        pause(); enterDeepIdle()
+        collection = nil; collectionID = nil; collectionTitle = ""; track = nil
+        queue.reset(count: 0, start: 0, shuffled: false)
+        position = 0; duration = 0; clock.position = 0; clock.duration = 0
+        error = nil; nowPlayingArtwork = nil
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        MPNowPlayingInfoCenter.default().playbackState = .stopped
+    }
     func next(automatic: Bool = false) {
         snapshot()
         guard let index = queue.moveNext(repeatMode: repeatMode, automatic: automatic), let collection else {
@@ -114,9 +126,22 @@ final class Player: ObservableObject {
     }
     func seek(_ value: Double) {
         guard track?.isLive != true else { return }
-        position = max(0, min(value, duration > 0 ? duration : value))
-        media?.seek(to: CMTime(seconds: position, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
-        clock.position = position; snapshot(); publishNowPlaying()
+        let target = max(0, min(value, duration > 0 ? duration : value))
+        let seekID = UUID()
+        pendingSeek = media == nil ? nil : (seekID, target)
+        position = target; clock.position = target
+        // AVPlayer seeks asynchronously. Reading currentTime here would save the
+        // old position over the destination, losing resume and Now Playing time.
+        if let collectionID, let index = queue.current { onSnapshot?(collectionID, index, target) }
+        publishNowPlaying()
+        media?.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
+            Task { @MainActor in
+                guard let self, self.pendingSeek?.id == seekID else { return }
+                self.pendingSeek = nil
+                guard finished else { return }
+                self.updateClock(); self.snapshot(); self.publishNowPlaying()
+            }
+        }
     }
     func toggleShuffle() {
         shuffle.toggle()
@@ -131,7 +156,8 @@ final class Player: ObservableObject {
         else { stopProgressObserver(); snapshot() }
     }
     func snapshot() {
-        if let seconds = media?.currentTime().seconds, seconds.isFinite { position = seconds }
+        if let pendingSeek { position = pendingSeek.target }
+        else if let seconds = media?.currentTime().seconds, seconds.isFinite { position = seconds }
         if let collectionID, let index = queue.current { onSnapshot?(collectionID, index, position) }
     }
     func enterDeepIdle() {
@@ -164,17 +190,17 @@ final class Player: ObservableObject {
                 await resolver.cancelBackground()
                 let item: AVPlayerItem
                 if offlineEnabled, let saved = await cache.completedEntry(for: track.id) {
-                    let resource = MediaResourceLoader(cache: cache, key: saved.key, stream: nil)
-                    loader = resource; item = AVPlayerItem(asset: resource.asset())
+                    let resource = AudioStreamServer(cache: cache, key: saved.key, stream: nil)
+                    server = resource; item = AVPlayerItem(url: try await resource.start())
                 } else {
                     let stream = try await resolver.resolve(track, fresh: recoveryAttempt)
                     try Task.checkCancellation()
                     guard generation == token else { return }
                     self.track = stream.track; duration = stream.track.duration ?? duration
-                    if automaticCache && offlineEnabled && !stream.isHLS && !stream.track.isLive {
+                    if !stream.isHLS && !stream.track.isLive {
                         let key = MediaCache.key(trackID: track.id, formatID: stream.formatID)
-                        let resource = MediaResourceLoader(cache: cache, key: key, stream: stream)
-                        loader = resource; item = AVPlayerItem(asset: resource.asset())
+                        let resource = AudioStreamServer(cache: cache, key: key, stream: stream, retaining: automaticCache && offlineEnabled)
+                        server = resource; item = AVPlayerItem(url: try await resource.start())
                     } else {
                         let asset = AVURLAsset(url: stream.url, options: ["AVURLAssetHTTPHeaderFieldsKey": stream.headers])
                         item = AVPlayerItem(asset: asset)
@@ -186,7 +212,9 @@ final class Player: ObservableObject {
                 item.preferredForwardBufferDuration = track.isLive ? 10 : 20
                 media = player
                 observe(item, player: player)
-                if position > 0 && self.track?.isLive != true { await player.seek(to: CMTime(seconds: position, preferredTimescale: 600)) }
+                if position > 0 && self.track?.isLive != true {
+                    await player.seek(to: CMTime(seconds: position, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+                }
                 try Task.checkCancellation(); guard generation == token else { return }
                 player.play(); isPlaying = true; isLoading = false; recovering = false
                 if let track = self.track { onTrackChanged?(track) }
@@ -200,6 +228,13 @@ final class Player: ObservableObject {
         }
     }
     private func observe(_ item: AVPlayerItem, player: AVPlayer) {
+        durationObservation = item.observe(\.duration, options: [.new]) { [weak self] item, _ in
+            Task { @MainActor in
+                guard let self, self.media?.currentItem === item else { return }
+                let value = item.duration.seconds
+                if value.isFinite && value > 0 { self.duration = value; self.clock.duration = value; self.publishNowPlaying() }
+            }
+        }
         statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             Task { @MainActor in
                 guard let self, self.media?.currentItem === item else { return }
@@ -247,15 +282,17 @@ final class Player: ObservableObject {
         if let periodic { media?.removeTimeObserver(periodic); self.periodic = nil }
     }
     private func updateClock() {
-        if let value = media?.currentTime().seconds, value.isFinite { position = value }
+        if let pendingSeek { position = pendingSeek.target }
+        else if let value = media?.currentTime().seconds, value.isFinite { position = value }
         clock.position = position; clock.duration = duration
     }
     private func tearDownPipeline() {
-        stopProgressObserver(); statusObservation = nil; controlObservation = nil
+        pendingSeek = nil
+        stopProgressObserver(); statusObservation = nil; durationObservation = nil; controlObservation = nil
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }; endObserver = nil
         if let stallObserver { NotificationCenter.default.removeObserver(stallObserver) }; stallObserver = nil
         media?.pause(); media?.replaceCurrentItem(with: nil); media = nil
-        loader?.cancel(); loader = nil
+        server?.stop(); server = nil
     }
     private func cancelIdleDeadline() {
         idleTimer?.setEventHandler(handler: nil); idleTimer?.cancel(); idleTimer = nil

@@ -177,6 +177,31 @@ private func script(_ directory: URL, body: String) throws -> URL {
 }
 
 @Suite struct CacheTests {
+    @Test func pinChangesProtectSharedAudioAndAllowRemoval() async throws {
+        let root = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: root) }
+        let saved = CacheEntry(key: "saved-140", trackID: "saved", formatID: "140", length: 3, chunks: [0], pinned: false, touched: Date())
+        let other = CacheEntry(key: "other-140", trackID: "other", formatID: "140", length: 3, chunks: [0], pinned: true, touched: Date())
+        for entry in [saved, other] {
+            let directory = root.appendingPathComponent(entry.key)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try Data([1, 2, 3]).write(to: directory.appendingPathComponent("0.chunk"))
+        }
+        try Paths.write([saved.key: saved, other.key: other], to: root.appendingPathComponent("index.json"))
+        let cache = MediaCache(root: root)
+        await cache.setPinned(trackIDs: ["saved"])
+        let entries = await cache.snapshot()
+        #expect(entries.first(where: { $0.trackID == "saved" })?.pinned == true)
+        #expect(entries.first(where: { $0.trackID == "other" })?.pinned == false)
+        await cache.clearAutomatic()
+        #expect(await cache.isComplete(trackID: "saved"))
+        #expect(!(await cache.isComplete(trackID: "other")))
+        // Another collection can retain a shared track until the last pin goes.
+        await cache.removeUnpinned(trackIDs: ["saved"])
+        #expect(await cache.isComplete(trackID: "saved"))
+        await cache.setPinned(trackIDs: [])
+        await cache.removeUnpinned(trackIDs: ["saved"])
+        #expect(!(await cache.isComplete(trackID: "saved")))
+    }
     @Test func corruptOfflineFileIsNoLongerAdvertisedAsComplete() async throws {
         let root = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: root) }
         let entry = CacheEntry(key: "broken", trackID: "track", formatID: "140", length: 10, chunks: [0], pinned: true, touched: Date())
