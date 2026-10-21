@@ -17,7 +17,7 @@ public struct DiscoverPick: Identifiable, Sendable {
     public let mood: String
     public let videoID: String
     public let playlistID: String?
-    public var thumbnail: URL { URL(string: "https://i.ytimg.com/vi/\(videoID)/hqdefault.jpg")! }
+    public var thumbnail: URL { URL(string: "https://i.ytimg.com/vi/\(videoID)/maxresdefault.jpg")! }
     public var url: URL { URL(string: playlistID.map { "https://www.youtube.com/playlist?list=\($0)" } ?? "https://www.youtube.com/watch?v=\(videoID)")! }
     public init(id: String, title: String, creator: String, mood: String, videoID: String, playlistID: String? = nil) {
         self.id = id; self.title = title; self.creator = creator; self.mood = mood; self.videoID = videoID; self.playlistID = playlistID

@@ -57,6 +57,11 @@ final class AppStore: ObservableObject {
         player.onTrackChanged = { [weak self] track in
             guard let self else { return }
             if let row = library.collections.firstIndex(where: { $0.id == self.player.collectionID }) {
+                let cover = library.collections[row].thumbnail
+                if library.collections[row].tracks.first?.id == track.id, let sharper = track.thumbnail,
+                   cover == nil || (cover?.host == sharper.host && cover?.pathComponents.contains(track.id) == true) {
+                    library.collections[row].thumbnail = sharper
+                }
                 for index in library.collections[row].tracks.indices where library.collections[row].tracks[index].id == track.id {
                     library.collections[row].tracks[index] = track
                 }
