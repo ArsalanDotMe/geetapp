@@ -33,7 +33,7 @@ An independent read-only design reviewer compared the implementation with the se
 | Transport doubled a recorded mix's duration | Map DASH fragment timing to native VOD HLS | Step 4 and audio acceptance |
 | White central glyph lacked contrast in dark appearance | Dark glyph on the lighter sage button | Steps 4 to 6 |
 
-The final reviewer found no blocking visual issue in Steps 4 to 6. Its remaining minor finding is that some publisher thumbnails look soft at large Retina card sizes. Thumbnail quality depends on upstream imagery. This review is screenshot evidence, not a full accessibility conformance assessment. Reduced Motion uses native preference checks; physical assistive-technology acceptance remains separate.
+The final reviewer found no blocking visual issue in Steps 4 to 6. Its minor finding about soft enlarged thumbnails was also addressed: matching playlist covers now reuse the first track's already-resolved sharper image, and all four curated Discover covers use verified higher-resolution sources. This adds no resolver work and preserves the existing image cache limits. Distinct playlist covers remain intact. Fresh actual-playback [track detail](final-track-artwork.png) and [Discover](final-discover-artwork.png) captures show the improvement. The independent reviewer confirmed sharper artwork with no remaining blocking issue evident in those screenshots. This review is screenshot evidence, not a full accessibility conformance assessment. Reduced Motion uses native preference checks; physical assistive-technology acceptance remains separate.
 
 ## Functional acceptance
 
@@ -43,7 +43,7 @@ All four curated Discover entries were imported and played through the native pl
 
 The separate runtime suite checks automatic advancement, repeat-one, repeat-all, live radio, offline playback, panel clock attachment/removal, and accelerated teardown using the same production lifecycle. Test modes return a nonzero exit code on failed acceptance.
 
-[Native interaction results](interaction-validation.json) confirm focused Add input, inaccessible background controls while the form is open, actual typed input and Return importing a new collection, the playlist Play button, and Space pausing/resuming with the corresponding progress-observer state. These use actual Accessibility and keyboard input rather than calling store methods. Volume unmute was exercised through the native popover. Status-item AXPress did not toggle the panel on this machine, so physical panel close/reopen is left to device acceptance rather than treated as a passed automation check.
+[Native interaction results](interaction-validation.json) confirm focused Add input, inaccessible background controls while the form is open, actual typed input and Return importing a new collection, the playlist Play button, and Space pausing/resuming with the corresponding progress-observer state. These use actual Accessibility and keyboard input rather than calling store methods. Volume unmute was exercised through the native popover. Status-item AXPress did not toggle the panel on this machine; the owner separately verified the real menu-bar close/reopen interaction.
 
 ## Resource acceptance
 
@@ -59,6 +59,6 @@ The [final 15-second idle measurement](idle-measurement.json) used 0.000958 seco
 
 [Build evidence](build-validation.json) records the source commit and executable digests. All 31 automated tests in nine suites passed. Debug and optimized release builds succeeded and passed strict deep ad-hoc signature verification. Release executable inspection found no debug preview, library-validation, or interactive-test entry points.
 
-Physical keyboard/headset media keys and audible output need direct device acceptance. Login-item approval, Intel hardware, long-duration battery measurement, Developer ID signing, hardened-runtime helper distribution, and notarization are not inferred from source or screenshot checks. Real checkout is deliberately deferred.
+The [owner's device acceptance](device-validation.json) confirms audible music, hardware Play/Pause and Next, and menu-bar panel close/reopen in the running native app. This covers the owner's available keyboard or headset, not every hardware model. The subsequent artwork-only refinement did not change playback or media command handling. Login-item approval, Intel hardware, long-duration battery measurement, Developer ID signing, hardened-runtime helper distribution, and notarization are not inferred from source or screenshot checks. Real checkout is deliberately deferred.
 
 Native interaction testing uses the owner's explicit Geet-only Accessibility authorization. The helper in `scripts/testing/accessibility.swift` refuses other bundle IDs and executables outside this checkout's build directory. Every injected keyboard event checks that Geet still has focus. Raw Accessibility dumps, key-event logs, private test state, and signed stream URLs stay in ignored `build/` output.
