@@ -1,0 +1,8 @@
+Use case: logo-brand.
+Create one clean, polished horizontal 4:3 identity concept plate for Geet, a quiet native Mac music player. Geet means song in Hindi and Urdu.
+
+Design an ORIGINAL compact sculptural Indian songbird emblem, subtly bulbul-inspired. The bird is in profile with an upright calm stance and a tiny lifted open beak suggesting song. A single sweeping wing has flowing calligraphic rhythm. The curved breast and bold negative space subtly hint at a G, without forcing a letter. Use only three or four substantial black shapes, a tiny bright eye, a distinctive but very restrained crest and a short elegant tail. The silhouette should feel carved, timeless and intelligent, with the high contrast cameo sensibility of classical black-and-white portrait emblems. Do not copy Hermes Agent's human face, helmet or arrangement. The emblem should be thumbnail-readable.
+
+Composition: warm ivory #F4F0E7 background, a very large dark ink #20211C songbird emblem in the upper-middle, and the exact lowercase word "geet" below in a generous warm elegant serif wordmark. At the lower right include one small app icon: the same emblem reversed in ivory in a muted dark forest #355A48 rounded square. At the lower left place three small discreet palette circles: ink, ivory and forest. Wide generous negative space, rigorous optical balance, sophisticated studio identity presentation. Flat vector-like geometry, crisp edges.
+
+Only readable text is "geet". No headings, eyebrow labels, annotations, tagline, construction grids, shadows, gradients, texture, realistic mockups, floating music notes, headphones, Twitter bird shape, sports team styling, clutter or watermark. The music connection comes from the singing bird itself.
