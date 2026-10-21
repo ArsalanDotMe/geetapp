@@ -1,0 +1,8 @@
+{
+  "native_add_field_focus": "PASS",
+  "native_add_hides_background_controls": "PASS",
+  "native_playlist_play": "PASS",
+  "native_space_pauses_and_removes_clock": "PASS",
+  "native_space_resumes_and_attaches_clock": "PASS",
+  "native_typing_and_return_import": "PASS"
+}

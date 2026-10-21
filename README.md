@@ -53,13 +53,15 @@ Offline listening will be unlocked by a one-time $5 contribution. **Debug builds
 
 The app prefers native AAC audio and audio-only HLS. For older extractors that expose only muxed live HLS, the lowest-bandwidth native rendition is the final fallback and video tracks are disabled. Normal recorded playback never requests a video format.
 
+For indexed DASH AAC, Geet maps the existing fragment index to a small, immutable HLS playlist on a private loopback endpoint. Encoded audio is unchanged. This gives AVPlayer accurate duration and direct seeking without scanning or downloading an entire long mix. The listener binds only to `127.0.0.1`, uses a random path, accepts at most four connections, and is released with the player. Free streaming keeps chunks in bounded memory; disk retention requires the offline entitlement and an explicit cache or download choice.
+
 ## Validation
 
 ```sh
 zsh scripts/test.sh
 ```
 
-The tests cover link normalization, queue history and repeat, duplicate entries, bounded metadata, resolver serialization and preemption, shared resolves, dependency cache reuse, failure cooldowns, and disk-cache integrity and memory limits.
+The 31 tests cover link normalization, queue history and repeat, duplicate entries, bounded metadata, resolver serialization and preemption, shared resolves, dependency cache reuse, failure cooldowns, disk-cache integrity, shared-download cancellation, memory-only streaming, DASH fragment indexing, initialization headers, and HTTP byte ranges.
 
 Debug-only runtime checks use isolated data, muted playback, real public YouTube content, and the actual native player:
 
@@ -69,9 +71,11 @@ GEET_DATA_DIR="$PWD/build/runtime-app-data" \
 build/Geet.app/Contents/MacOS/Geet --validate-runtime
 ```
 
-The deep-idle scheduler is exercised with a 0.25-second injected deadline; production uses 600 seconds. Offline playback is checked with no new network requests or helper launches. Physical hardware media keys, launch-at-login permissions, real unlisted content, and a long-running battery measurement still need device acceptance. Native screenshot inspection does not substitute for those checks.
+Additional debug checks are `--validate-library`, `--validate-audio`, and `--verify-deep-idle`. Use a fresh isolated `GEET_DATA_DIR` and `GEET_VALIDATION_DIR` for each run. Library acceptance starts empty and exercises real store actions, all four Discover choices, offline playback, persistence, refresh, and cancellation. Supply an unlisted playlist through `GEET_UNLISTED_URL`; it is excluded from the shareable report and captures. The audio check measures a two-hour mix, verifies duration and playback speed, then seeks near its end without downloading intervening audio.
 
-The [selected design](Design/References/option-2-cover-stories.png) is retained for future reference. [Native validation](Design/Validation/README.md) contains captures and the validation summary. `--design-preview` uses a separate, in-memory fixture library solely for design review; no sample playlists are inserted into the real library. It is excluded from release builds.
+The paused deadline was also exercised over the actual 600 seconds, with no additional helpers and a successful warm resume. The short runtime suite injects a 0.25-second deadline for repeatable teardown checks. Offline playback is checked with unchanged outbound request and helper counters. Native Accessibility testing covers actual clicks and keyboard input; it does not substitute for physical keyboard/headset media-key acceptance or a long-running battery measurement.
+
+The [selected design](Design/References/option-2-cover-stories.png) is retained for future reference. The [completion review](Design/Validation/Completion/README.md) contains fresh native captures, the independent design critique, runtime evidence, and acceptance limits. [Initial validation](Design/Validation/README.md) is retained as historical evidence. `--design-preview` uses a separate, in-memory fixture library solely for design review; no sample playlists are inserted into the real library. It and the runtime/interaction harnesses are excluded from release builds.
 
 ## Privacy and dependencies
 

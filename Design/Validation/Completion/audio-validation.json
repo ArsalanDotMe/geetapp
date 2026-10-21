@@ -1,0 +1,19 @@
+{
+  "finished": "2026-10-21T19:36:36Z",
+  "immediate_pause_does_not_lose_seek": "PASS",
+  "long_mix_native_duration_matches_metadata": "PASS",
+  "long_mix_seek_fetches_only_needed_fragments": "PASS",
+  "long_mix_seek_near_end": "PASS",
+  "native_duration_seconds": "7237.427",
+  "pipeline_released": "PASS",
+  "playback_clock_advances_in_real_time": "PASS",
+  "range_requests_after_30_seconds": "3",
+  "recorded_native_duration_matches_metadata": "PASS",
+  "resident_bytes_after": "90800128",
+  "resident_bytes_before": "89473024",
+  "sample_seconds": "31.1681649684906",
+  "steady_playback_cpu_percent": "0.7367581640823193",
+  "streaming_does_not_download_entire_long_mix": "PASS",
+  "streaming_does_not_retain_audio_on_disk": "PASS",
+  "streaming_memory_cache_is_bounded": "PASS"
+}

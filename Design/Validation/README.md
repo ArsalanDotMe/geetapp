@@ -1,5 +1,7 @@
 # Native validation
 
+This is the initial implementation record. The newer [completion review](Completion/README.md) supersedes its acceptance status, test counts, transport details, and remaining unlisted-playlist check.
+
 Validated on 21 October 2026 using macOS 26.6.2, Apple Silicon, and Xcode 27.1.
 
 ## Build and source checks
