@@ -6,8 +6,8 @@ export CLANG_MODULE_CACHE_PATH="$PWD/.build/ModuleCache"
 export SWIFTPM_MODULECACHE_OVERRIDE="$CLANG_MODULE_CACHE_PATH"
 swift build --disable-sandbox -c "$configuration"
 products="$(swift build --disable-sandbox -c "$configuration" --show-bin-path)"
-destination="$PWD/build/Geet.app"
-if [[ "$configuration" == release ]]; then destination="$PWD/build/Release/Geet.app"; fi
+destination="${GEET_BUILD_DESTINATION:-$PWD/build/Geet.app}"
+if [[ "$configuration" == release && -z "${GEET_BUILD_DESTINATION:-}" ]]; then destination="$PWD/build/Release/Geet.app"; fi
 mkdir -p "$destination/Contents/MacOS" "$destination/Contents/Resources"
 cp "$products/Geet" "$destination/Contents/MacOS/Geet"
 cp -R "$products/Geet_Geet.bundle" "$destination/Contents/Resources/"

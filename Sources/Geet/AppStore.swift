@@ -21,7 +21,9 @@ final class AppStore: ObservableObject {
     let root: URL
     let preview: Bool
     private var importTask: Task<Void, Never>?
+    private var importGeneration = UUID()
     private var downloadTask: Task<Void, Never>?
+    private var downloadCollectionID: String?
     private var clipboardTask: Task<Void, Never>?
     private var clipboardChange = -1
     private var saveWork: DispatchWorkItem?
@@ -31,9 +33,9 @@ final class AppStore: ObservableObject {
         DiscoverPick(id: "fall", title: "Chillhop Essentials Fall", creator: "Chillhop Music", mood: "Settle into the season", videoID: "jiua2V9q9V0", playlistID: "PLt7bG0K25iXjIl0bopl1TY8_6n35gsgcd"),
         DiscoverPick(id: "winter", title: "Chillhop Essentials Winter", creator: "Chillhop Music", mood: "A slower kind of afternoon", videoID: "Zq0cZnA2Dhc", playlistID: "PLt7bG0K25iXh5RbylpYcJwsHBpM0dGc2i")
     ]
-    init(preview: Bool = false) {
+    init(preview: Bool = false, root overrideRoot: URL? = nil) {
         self.preview = preview
-        root = preview ? FileManager.default.temporaryDirectory.appendingPathComponent("geet-design-preview") : Paths.support
+        self.root = overrideRoot ?? (preview ? FileManager.default.temporaryDirectory.appendingPathComponent("geet-design-preview") : Paths.support)
         #if DEBUG
         library = preview ? PreviewData.library : Paths.read(LibraryDocument.self, from: root.appendingPathComponent("library.json")) ?? LibraryDocument()
         offlineEnabled = true
@@ -53,8 +55,16 @@ final class AppStore: ObservableObject {
         }
         player.onConfiguration = { [weak self] in self?.saveConfiguration() }
         player.onTrackChanged = { [weak self] track in
-            guard let self, let url = track.thumbnail else { return }
-            Task { if let image = await self.artwork.image(url) { self.player.setArtwork(image, trackID: track.id) } }
+            guard let self else { return }
+            if let row = library.collections.firstIndex(where: { $0.id == self.player.collectionID }) {
+                for index in library.collections[row].tracks.indices where library.collections[row].tracks[index].id == track.id {
+                    library.collections[row].tracks[index] = track
+                }
+                scheduleSave()
+            }
+            if let url = track.thumbnail {
+                Task { if let image = await self.artwork.image(url) { self.player.setArtwork(image, trackID: track.id) } }
+            }
         }
         // No startup Tasks, dependency probes, artwork fetches, or AVPlayer allocation.
     }
@@ -71,17 +81,20 @@ final class AppStore: ObservableObject {
             if playAfter { play(existing) } else { message = "This playlist is already in your library." }; return
         }
         busy = true; message = nil
+        let token = UUID(); importGeneration = token
         clipboardTask?.cancel()
         importTask = Task {
             do {
                 await resolver.cancelBackground()
                 let collection = try await resolver.importCollection(link)
                 try Task.checkCancellation()
+                guard importGeneration == token else { return }
                 library.collections.append(collection); scheduleSave(); busy = false
                 if playAfter { play(collection) }
                 clipboardLink = nil
                 await updateDependency()
             } catch {
+                guard importGeneration == token else { return }
                 busy = false; if !Task.isCancelled { message = error.localizedDescription }
             }
         }
@@ -89,9 +102,12 @@ final class AppStore: ObservableObject {
     func refresh(_ collection: Collection) {
         guard !busy else { return }
         busy = true
+        let token = UUID(); importGeneration = token
         importTask = Task {
             do {
                 var fresh = try await resolver.importCollection(YouTubeLink(collection.source.absoluteString))
+                try Task.checkCancellation()
+                guard importGeneration == token else { return }
                 fresh.addedAt = collection.addedAt; fresh.keepsOffline = collection.keepsOffline
                 if collection.tracks.indices.contains(collection.resumeIndex),
                    let index = fresh.tracks.firstIndex(where: { $0.id == collection.tracks[collection.resumeIndex].id }) {
@@ -100,11 +116,16 @@ final class AppStore: ObservableObject {
                 if let row = library.collections.firstIndex(where: { $0.id == fresh.id }) { library.collections[row] = fresh }
                 scheduleSave(); busy = false
                 if fresh.keepsOffline { keepOffline(fresh) }
-            } catch { busy = false; message = error.localizedDescription }
+            } catch {
+                guard importGeneration == token else { return }
+                busy = false; if !Task.isCancelled { message = error.localizedDescription }
+            }
         }
     }
     func remove(_ collection: Collection) {
-        if player.collectionID == collection.id { player.pause(); player.enterDeepIdle() }
+        if downloadCollectionID == collection.id { cancelDownload() }
+        if player.collectionID == collection.id { player.stop() }
+        if library.selectedID == collection.id { library.selectedID = nil }
         library.collections.removeAll { $0.id == collection.id }; scheduleSave(); synchronizePins()
     }
     func moveToTop(_ collection: Collection) {
@@ -116,27 +137,40 @@ final class AppStore: ObservableObject {
         if downloadTask != nil { message = "A playlist is already being saved. Let it finish, or cancel it first."; return }
         guard let row = library.collections.firstIndex(where: { $0.id == collection.id }) else { return }
         library.collections[row].keepsOffline = true; scheduleSave()
+        downloadCollectionID = collection.id
         downloads[collection.id] = 0
         downloadTask = Task {
-            defer { downloads.removeValue(forKey: collection.id); downloadTask = nil }
+            defer { downloads.removeValue(forKey: collection.id); downloadTask = nil; downloadCollectionID = nil }
             let tracks = collection.tracks.filter { !$0.isLive }
             do {
                 guard !tracks.isEmpty else { throw GeetError.message("Live radio is available online only.") }
                 for (index, track) in tracks.enumerated() {
                     try Task.checkCancellation()
-                    let stream = try await resolver.resolve(track)
-                    try await cache.download(stream, pinned: true) { [weak self] progress in
-                        Task { @MainActor in self?.downloads[collection.id] = (Double(index) + progress) / Double(tracks.count) }
+                    if await cache.isComplete(trackID: track.id) {
+                        downloads[collection.id] = Double(index + 1) / Double(tracks.count)
+                    } else {
+                        let stream = try await resolver.resolve(track)
+                        try Task.checkCancellation()
+                        try await cache.download(stream, pinned: true) { [weak self] progress in
+                            Task { @MainActor in
+                                guard self?.downloadCollectionID == collection.id, self?.downloadTask?.isCancelled == false else { return }
+                                self?.downloads[collection.id] = (Double(index) + progress) / Double(tracks.count)
+                            }
+                        }
                     }
                     await updateStorage()
                 }
-                synchronizePins()
             } catch { if !Task.isCancelled { message = error.localizedDescription } }
+            // A cancelled download must not repin music removed from the library.
+            let pins = Set(library.collections.filter(\.keepsOffline).flatMap(\.tracks).map(\.id))
+            await cache.setPinned(trackIDs: pins)
             await updateStorage()
         }
     }
     func cancelDownload() { downloadTask?.cancel() }
+    func cancelImport() { importGeneration = UUID(); importTask?.cancel(); importTask = nil; busy = false }
     func removeOffline(_ collection: Collection) {
+        if downloadCollectionID == collection.id { cancelDownload() }
         if let row = library.collections.firstIndex(where: { $0.id == collection.id }) { library.collections[row].keepsOffline = false }
         scheduleSave()
         let pins = Set(library.collections.filter(\.keepsOffline).flatMap(\.tracks).map(\.id))
@@ -152,11 +186,18 @@ final class AppStore: ObservableObject {
         guard offlineEnabled else { return }
         library.automaticCache = value; player.automaticCache = value; scheduleSave()
     }
-    func panelOpened() {
+    func savedCollection(for pick: DiscoverPick) -> Collection? {
+        library.collections.first { $0.source == pick.url }
+    }
+    func playDiscover(_ pick: DiscoverPick) {
+        if let collection = savedCollection(for: pick) { play(collection) }
+        else { add(pick.url.absoluteString, playAfter: true) }
+    }
+    func panelOpened(inspectClipboard: Bool = true) {
         player.panelVisible(true)
         Task { await updateStorage(); await updateDependency() }
         // Clipboard access occurs once on panel opening, never via polling.
-        guard !preview else { return }
+        guard !preview, inspectClipboard else { return }
         let pasteboard = NSPasteboard.general
         guard pasteboard.changeCount != clipboardChange else { return }
         clipboardChange = pasteboard.changeCount

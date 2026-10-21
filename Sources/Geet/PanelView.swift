@@ -2,12 +2,17 @@ import SwiftUI
 import ServiceManagement
 import GeetCore
 
-private let sage = Color(red: 0.32, green: 0.40, blue: 0.29)
+private let sage = Color(nsColor: NSColor(name: nil) { appearance in
+    appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        ? NSColor(red: 0.66, green: 0.77, blue: 0.60, alpha: 1)
+        : NSColor(red: 0.32, green: 0.40, blue: 0.29, alpha: 1)
+})
 
 struct PanelView: View {
     @ObservedObject var store: AppStore
     @ObservedObject var player: Player
     let height: CGFloat
+    var startingScreen: String? = nil
     @State private var tab = 0
     @State private var detail: String?
     @State private var settings = false
@@ -27,7 +32,7 @@ struct PanelView: View {
             else {
                 CollectionPicker(selection: $tab).frame(height: 28)
                 if searching {
-                    TextField("Search playlists", text: $search).textFieldStyle(.roundedBorder)
+                    TextField(tab == 0 ? "Search your library" : "Search Discover", text: $search).textFieldStyle(.roundedBorder)
                         .onExitCommand { searching = false; search = "" }
                 }
                 ScrollView {
@@ -35,28 +40,35 @@ struct PanelView: View {
                 }
                 .scrollIndicators(.hidden)
                 .frame(maxHeight: .infinity)
-                if store.busy { HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Opening your link…").font(.system(size: 12)); Spacer() } }
+                if store.busy {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small); Text("Opening your link…").font(.system(size: 12)); Spacer()
+                        Button("Cancel", action: store.cancelImport).buttonStyle(.plain).font(.system(size: 12))
+                    }
+                }
                 if let copied = store.clipboardLink, !store.busy {
                     HStack {
                         Button { store.add(copied) } label: { Label("Add copied link", systemImage: "link") }
                             .buttonStyle(.plain).font(.system(size: 12, weight: .medium))
                         Spacer()
-                        Button { store.clipboardLink = nil } label: { Image(systemName: "xmark").font(.system(size: 10)) }.buttonStyle(.plain)
+                        Button { store.clipboardLink = nil } label: { Image(systemName: "xmark").font(.system(size: 10)).frame(width: 28, height: 28) }.buttonStyle(.plain).accessibilityLabel("Dismiss copied link")
                     }.padding(10).background(.quaternary, in: .rect(cornerRadius: 10))
                 }
-                if player.track != nil || store.preview {
-                    TransportView(player: player, clock: player.clock, artwork: store.artwork, preview: store.preview, acceptsSpace: !adding && !searching,
-                                  showQueue: { detail = player.collectionID ?? store.library.collections.first?.id })
-                } else {
+            }
+            if player.track != nil || store.preview {
+                TransportView(player: player, clock: player.clock, artwork: store.artwork, preview: store.preview, acceptsSpace: !adding && !searching,
+                              showQueue: { settings = false; support = false; detail = player.collectionID ?? store.library.collections.first?.id })
+            } else if !settings && !support && detail == nil {
                     HStack(spacing: 7) { Image(systemName: "waveform"); Text("A little room for your music.") }
                         .font(.system(size: 12)).foregroundStyle(.secondary).frame(height: 30)
-                }
             }
         }
         .padding(18)
         .frame(width: 450, height: height)
         .tint(sage)
         .background(Color(nsColor: .windowBackgroundColor).opacity(0.30))
+        .allowsHitTesting(!adding)
+        .accessibilityHidden(adding)
         .overlay { if adding { addOverlay } }
         .animation(reduceMotion ? nil : .smooth(duration: 0.22), value: tab)
         .animation(reduceMotion ? nil : .smooth(duration: 0.22), value: detail)
@@ -65,18 +77,28 @@ struct PanelView: View {
         } message: { Text(store.message ?? player.error ?? "") }
         .onDrop(of: [.url, .plainText], isTargeted: nil) { providers in
             guard let provider = providers.first else { return false }
-            _ = provider.loadObject(ofClass: String.self) { value, _ in
-                if let value { Task { @MainActor in store.add(value) } }
-            }; return true
+            if provider.canLoadObject(ofClass: NSURL.self) {
+                _ = provider.loadObject(ofClass: NSURL.self) { value, _ in
+                    if let value = value as? URL { Task { @MainActor in store.add(value.absoluteString) } }
+                }
+            } else {
+                _ = provider.loadObject(ofClass: String.self) { value, _ in
+                    if let value { Task { @MainActor in store.add(value) } }
+                }
+            }
+            return true
         }
         .onAppear {
             #if DEBUG
-            if let index = CommandLine.arguments.firstIndex(of: "--capture-screen"), CommandLine.arguments.indices.contains(index + 1) {
-                switch CommandLine.arguments[index + 1] {
+            let index = CommandLine.arguments.firstIndex(of: "--capture-screen")
+            if let screen = startingScreen ?? index.flatMap({ CommandLine.arguments.indices.contains($0 + 1) ? CommandLine.arguments[$0 + 1] : nil }) {
+                switch screen {
                 case "discover": tab = 1
                 case "settings": settings = true
                 case "detail": detail = store.library.collections.first?.id
                 case "add": adding = true; linkFocused = true
+                case "search": searching = true; search = "Chillhop"
+                case "support": support = true
                 default: break
                 }
             }
@@ -86,16 +108,17 @@ struct PanelView: View {
     private var header: some View {
         HStack(spacing: 14) {
             if detail != nil || settings || support {
-                Button { detail = nil; settings = false; support = false } label: { Image(systemName: "chevron.left").font(.system(size: 14, weight: .semibold)) }
-                    .buttonStyle(.plain).help("Back to your library")
+                Button { detail = nil; settings = false; support = false } label: {
+                    Image(systemName: "chevron.left").font(.system(size: 14, weight: .semibold)).frame(width: 28, height: 28).contentShape(Rectangle())
+                }.buttonStyle(.plain).help("Back to your library").accessibilityLabel("Back to your library")
             }
             Text(settings ? "Settings" : support ? "Support Geet" : "Geet")
                 .font(.system(size: 22, weight: .bold, design: .rounded)).tracking(-0.5)
             Spacer()
-            if !settings && !support {
-                Button { searching.toggle(); if !searching { search = "" } } label: { Image(systemName: "magnifyingglass") }
+            if !settings && !support && detail == nil {
+                Button { searching.toggle(); if !searching { search = "" } } label: { Image(systemName: "magnifyingglass").frame(width: 28, height: 28).contentShape(Rectangle()) }
                     .buttonStyle(.plain).help("Search playlists").accessibilityLabel("Search playlists")
-                Button { adding = true; linkFocused = true } label: { Image(systemName: "plus").font(.system(size: 20, weight: .regular)) }
+                Button { adding = true; linkFocused = true } label: { Image(systemName: "plus").font(.system(size: 20, weight: .regular)).frame(width: 28, height: 28).contentShape(Rectangle()) }
                     .buttonStyle(.plain).help("Add a YouTube link").accessibilityLabel("Add playlist").accessibilityIdentifier("add-playlist")
             }
             Menu {
@@ -137,8 +160,17 @@ struct PanelView: View {
             HStack(alignment: .bottom, spacing: 10) {
                 Button { detail = collection.id } label: {
                     VStack(alignment: .leading, spacing: 5) {
-                        Text(collection.title).font(.system(size: 17, weight: .semibold)).lineLimit(2)
+                        HStack(spacing: 6) {
+                            if player.collectionID == collection.id || store.preview && collection.id == "late" {
+                                Image(systemName: "waveform").accessibilityLabel("Current playlist")
+                            }
+                            Text(collection.title).font(.system(size: 17, weight: .semibold)).lineLimit(2)
+                        }
                         Text(collection.subtitle).font(.system(size: 12)).opacity(0.9).lineLimit(1)
+                        if let progress = store.downloads[collection.id] {
+                            ProgressView(value: progress).tint(.white)
+                                .accessibilityLabel("Saving playlist offline")
+                        }
                     }.foregroundStyle(.white).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                 }.buttonStyle(.plain).help("View tracks")
                 HStack(spacing: 10) {
@@ -172,8 +204,9 @@ struct PanelView: View {
                     }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                 }.buttonStyle(.plain).help("View tracks")
                 playButton(collection)
-                Button { detail = collection.id } label: { Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(.primary) }
-                    .buttonStyle(.plain).help("View tracks in \(collection.title)")
+                Button { detail = collection.id } label: {
+                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(.primary).frame(width: 28, height: 32).contentShape(Rectangle())
+                }.buttonStyle(.plain).help("View tracks in \(collection.title)").accessibilityLabel("View tracks in \(collection.title)")
             }.padding(.horizontal, 13)
         }
         .frame(height: 66).clipShape(.rect(cornerRadius: 11))
@@ -195,7 +228,7 @@ struct PanelView: View {
         Menu { collectionMenuItems(collection) } label: {
             Image(systemName: "ellipsis").font(.system(size: 15)).foregroundStyle(light ? .white : .primary)
                 .frame(width: 30, height: 34).background(.white.opacity(light ? 0.16 : 0), in: Circle())
-        }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(light ? .white : .primary).fixedSize().help("Playlist options")
+        }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(light ? .white : .primary).fixedSize().help("Playlist options").accessibilityLabel("Options for \(collection.title)")
     }
     @ViewBuilder private func collectionMenuItems(_ collection: Collection) -> some View {
         Button("Play from beginning") { store.play(collection, beginning: true) }
@@ -204,6 +237,11 @@ struct PanelView: View {
         Divider()
         Button(collection.keepsOffline ? "Stop keeping offline" : "Keep offline") {
             if collection.keepsOffline { store.removeOffline(collection) } else { store.keepOffline(collection) }
+        }
+        if store.downloads[collection.id] != nil {
+            Button("Cancel download", action: store.cancelDownload)
+        } else if collection.keepsOffline && collection.tracks.contains(where: { !$0.isLive && !store.savedTrackIDs.contains($0.id) }) {
+            Button("Finish saving offline") { store.keepOffline(collection) }
         }
         Button("Refresh playlist") { store.refresh(collection) }
         Button("Open on YouTube") { NSWorkspace.shared.open(collection.source) }
@@ -214,7 +252,9 @@ struct PanelView: View {
         LazyVStack(alignment: .leading, spacing: 14) {
             Text("Settle into something good.").font(.system(size: 21, weight: .semibold, design: .rounded)).padding(.top, 5)
             Text("A few places to find your focus.").font(.system(size: 13)).foregroundStyle(.secondary)
-            ForEach(AppStore.discover) { pick in
+            ForEach(AppStore.discover.filter { search.isEmpty || $0.title.localizedCaseInsensitiveContains(search) || $0.creator.localizedCaseInsensitiveContains(search) }) { pick in
+                let saved = store.savedCollection(for: pick)
+                let active = saved?.id == player.collectionID && (player.isPlaying || player.isLoading)
                 VStack(alignment: .leading, spacing: 0) {
                     CoverArt(url: pick.thumbnail, store: store.artwork).frame(height: 145).clipped()
                     HStack {
@@ -223,10 +263,28 @@ struct PanelView: View {
                             Text(pick.creator).font(.system(size: 12)).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Button { store.add(pick.url.absoluteString, playAfter: true) } label: { Image(systemName: "play.fill").frame(width: 27, height: 27) }.buttonStyle(.glass).buttonBorderShape(.circle).help("Play and add to library")
-                        Button { store.add(pick.url.absoluteString) } label: { Image(systemName: "plus").frame(width: 24, height: 24) }.buttonStyle(.plain).help("Add to library")
+                        Button { store.playDiscover(pick) } label: {
+                            Group {
+                                if saved?.id == player.collectionID && player.isLoading { ProgressView().controlSize(.small) }
+                                else { Image(systemName: active ? "pause.fill" : "play.fill").font(.system(size: 14, weight: .semibold)) }
+                            }
+                            .foregroundStyle(Color.black.opacity(0.85)).frame(width: 36, height: 36)
+                                .background(.white.opacity(0.94), in: Circle())
+                        }.buttonStyle(PressScale()).disabled(store.busy && saved == nil)
+                            .help(active ? "Pause \(pick.title)" : "Play \(pick.title)")
+                            .accessibilityLabel(active ? "Pause \(pick.title)" : "Play \(pick.title)")
+                        if saved != nil {
+                            Image(systemName: "checkmark").foregroundStyle(sage).frame(width: 28, height: 32)
+                                .help("In your library").accessibilityLabel("In your library")
+                        } else {
+                            Button { store.add(pick.url.absoluteString) } label: { Image(systemName: "plus").frame(width: 28, height: 32) }
+                                .buttonStyle(.plain).disabled(store.busy).help("Add to library").accessibilityLabel("Add \(pick.title) to library")
+                        }
                     }.padding(12)
                 }.background(.quaternary.opacity(0.35), in: .rect(cornerRadius: 12)).clipShape(.rect(cornerRadius: 12))
+            }
+            if !search.isEmpty && !AppStore.discover.contains(where: { $0.title.localizedCaseInsensitiveContains(search) || $0.creator.localizedCaseInsensitiveContains(search) }) {
+                Text("No playlists found. Try a different name or creator.").font(.system(size: 13)).foregroundStyle(.secondary)
             }
             Text("Selections are curated, not a live popularity chart.").font(.system(size: 11)).foregroundStyle(.tertiary).padding(.bottom, 8)
         }
@@ -244,7 +302,11 @@ struct PanelView: View {
                     ForEach(Array(collection.tracks.enumerated()), id: \.offset) { index, track in
                         Button { store.play(collection, index: index) } label: {
                             HStack(spacing: 10) {
-                                Text(String(index + 1)).font(.system(size: 11).monospacedDigit()).foregroundStyle(.tertiary).frame(width: 24)
+                                if player.collectionID == collection.id && player.currentIndex == index {
+                                    Image(systemName: "waveform").foregroundStyle(sage).frame(width: 24).accessibilityLabel("Current track")
+                                } else {
+                                    Text(String(index + 1)).font(.system(size: 11).monospacedDigit()).foregroundStyle(.tertiary).frame(width: 24)
+                                }
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(track.title).font(.system(size: 13, weight: .medium)).lineLimit(2)
                                     Text(track.artist).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
@@ -254,10 +316,10 @@ struct PanelView: View {
                                 Text(track.isLive ? "Live" : timeLabel(track.duration ?? 0)).font(.system(size: 11).monospacedDigit()).foregroundStyle(.secondary)
                             }.padding(.vertical, 9).padding(.horizontal, 6).contentShape(Rectangle())
                         }.buttonStyle(.plain)
+                            .background(player.collectionID == collection.id && player.currentIndex == index ? sage.opacity(0.1) : .clear, in: .rect(cornerRadius: 8))
                     }
                 }
             }.scrollIndicators(.hidden)
-            if player.track != nil { TransportView(player: player, clock: player.clock, artwork: store.artwork, preview: false, acceptsSpace: !adding, showQueue: {}) }
         }.frame(maxHeight: .infinity)
     }
     private var settingsView: some View {
@@ -318,12 +380,17 @@ struct PanelView: View {
                     .onSubmit { submitLink() }.accessibilityIdentifier("youtube-link")
                 HStack {
                     Button("Paste") { link = NSPasteboard.general.string(forType: .string) ?? "" }.buttonStyle(.plain)
-                    Spacer(); Button("Add to library") { submitLink() }.buttonStyle(.glassProminent).disabled(link.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Spacer(); Button("Add to library") { submitLink() }.buttonStyle(.glassProminent).disabled(store.busy || link.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityIdentifier("confirm-add")
                 }
             }.padding(24).frame(width: 382).background(.regularMaterial, in: .rect(cornerRadius: 20)).shadow(color: .black.opacity(0.12), radius: 24, y: 10)
-        }.onExitCommand { adding = false }
+        }.onExitCommand { adding = false }.task {
+            // Wait for the overlay's native field to join the key window.
+            linkFocused = false
+            try? await Task.sleep(for: .milliseconds(100))
+            if !Task.isCancelled { linkFocused = true }
+        }
     }
-    private func submitLink() { store.add(link); if (try? YouTubeLink(link)) != nil { adding = false; link = "" } }
+    private func submitLink() { guard !store.busy else { return }; store.add(link); if (try? YouTubeLink(link)) != nil { adding = false; link = "" } }
 }
 
 private struct PressScale: ButtonStyle {
@@ -344,6 +411,7 @@ struct TransportView: View {
     @State private var scrubbing = false
     @State private var scrubPosition = 0.0
     @State private var volumeOpen = false
+    @Environment(\.colorScheme) private var colorScheme
     private var elapsed: Double { preview ? 754 : scrubbing ? scrubPosition : clock.position }
     private var duration: Double { preview ? 2538 : max(clock.duration, 1) }
     var body: some View {
@@ -355,7 +423,7 @@ struct TransportView: View {
                     Text(preview ? "Late Night Coding" : player.collectionTitle).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 6)
-                Button(action: showQueue) { Image(systemName: "list.bullet").font(.system(size: 15)) }.buttonStyle(.plain).help("View playlist tracks").accessibilityLabel("View playlist tracks")
+                Button(action: showQueue) { Image(systemName: "list.bullet").font(.system(size: 15)).frame(width: 28, height: 28).contentShape(Rectangle()) }.buttonStyle(.plain).help("View playlist tracks").accessibilityLabel("View playlist tracks")
             }
             if player.track?.isLive == true {
                 HStack(spacing: 5) { Circle().fill(sage).frame(width: 5, height: 5); Text("Live radio").font(.system(size: 10)); Spacer() }.padding(.vertical, 3)
@@ -369,22 +437,22 @@ struct TransportView: View {
                     Text(timeLabel(preview ? 2538 : clock.duration)).frame(minWidth: 31, alignment: .trailing)
                 }.font(.system(size: 9).monospacedDigit()).foregroundStyle(.secondary)
             }
-            HStack(spacing: 24) {
+            HStack(spacing: 16) {
                 Spacer(minLength: 0)
-                transportButton("shuffle", label: "Shuffle", active: player.shuffle, action: player.toggleShuffle)
+                transportButton("shuffle", label: "Shuffle", active: player.shuffle, state: player.shuffle ? "On" : "Off", action: player.toggleShuffle)
                 transportButton("backward.end.fill", label: "Previous", action: player.previous)
                 Button { player.toggle() } label: {
                     Group { if player.isLoading { ProgressView().controlSize(.small) } else { Image(systemName: player.isPlaying || preview ? "pause.fill" : "play.fill").font(.system(size: 18, weight: .medium)) } }
-                        .foregroundStyle(.white).frame(width: 43, height: 43).background(sage, in: Circle())
-                }.buttonStyle(PressScale()).help(player.isPlaying ? "Pause" : "Play").accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+                        .foregroundStyle(colorScheme == .dark ? Color.black.opacity(0.85) : .white).frame(width: 43, height: 43).background(sage, in: Circle())
+                }.buttonStyle(PressScale()).help(player.isLoading ? "Cancel playback" : player.isPlaying ? "Pause" : "Play").accessibilityLabel(player.isLoading ? "Cancel playback" : player.isPlaying ? "Pause" : "Play")
                     .keyboardShortcut(acceptsSpace ? KeyboardShortcut(.space, modifiers: []) : nil)
                 transportButton("forward.end.fill", label: "Next", action: { player.next() })
                 transportButton(player.repeatMode == .one ? "repeat.1" : "repeat", label: "Repeat: \(player.repeatMode.rawValue)", active: player.repeatMode != .off, action: player.cycleRepeat)
-                Button { volumeOpen.toggle() } label: { Image(systemName: player.volume == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill").font(.system(size: 12)) }
+                Button { volumeOpen.toggle() } label: { Image(systemName: player.volume == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill").font(.system(size: 12)).frame(width: 28, height: 32).contentShape(Rectangle()) }
                     .buttonStyle(.plain).help("Volume").accessibilityLabel("Volume")
                     .popover(isPresented: $volumeOpen) {
                         HStack {
-                            Button { player.volume = player.volume == 0 ? 0.8 : 0 } label: { Image(systemName: player.volume == 0 ? "speaker.slash" : "speaker.wave.2") }.buttonStyle(.plain).help("Mute or unmute")
+                            Button { player.volume = player.volume == 0 ? 0.8 : 0 } label: { Image(systemName: player.volume == 0 ? "speaker.slash" : "speaker.wave.2") }.buttonStyle(.plain).help("Mute or unmute").accessibilityLabel("Mute or unmute")
                             Slider(value: Binding(get: { Double(player.volume) }, set: { player.volume = Float($0) }), in: 0...1).accessibilityLabel("Volume level")
                         }.padding(14).frame(width: 190)
                     }
@@ -394,9 +462,9 @@ struct TransportView: View {
             .background(.quaternary.opacity(0.3), in: .rect(cornerRadius: 14))
             .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(0.35), lineWidth: 0.5))
     }
-    private func transportButton(_ symbol: String, label: String, active: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Image(systemName: symbol).font(.system(size: 14)).foregroundStyle(active ? sage : Color.primary.opacity(0.7)) }
-            .buttonStyle(.plain).help(label).accessibilityLabel(label)
+    private func transportButton(_ symbol: String, label: String, active: Bool = false, state: String = "", action: @escaping () -> Void) -> some View {
+        Button(action: action) { Image(systemName: symbol).font(.system(size: 14)).foregroundStyle(active ? sage : Color.primary.opacity(0.7)).frame(width: 28, height: 32).contentShape(Rectangle()) }
+            .buttonStyle(.plain).help(label).accessibilityLabel(label).accessibilityValue(state)
     }
 }
 

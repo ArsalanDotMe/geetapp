@@ -25,7 +25,7 @@ enum RuntimeValidation {
             }
         }
     }
-    private static func sample() -> (Double, UInt64) {
+    static func sample() -> (Double, UInt64) {
         var usage = rusage(); getrusage(RUSAGE_SELF, &usage)
         let cpu = Double(usage.ru_utime.tv_sec + usage.ru_stime.tv_sec) + Double(usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) / 1_000_000
         var info = mach_task_basic_info_data_t()
@@ -37,7 +37,7 @@ enum RuntimeValidation {
         }
         return (cpu, info.resident_size)
     }
-    static func run(tools: URL) async {
+    static func run(tools: URL) async -> Bool {
         let root = URL(fileURLWithPath: ProcessInfo.processInfo.environment["GEET_VALIDATION_DIR"] ?? "/tmp/geet-runtime-validation")
         Paths.ensure(root)
         var checks: [String: String] = [:]
@@ -84,7 +84,7 @@ enum RuntimeValidation {
             player.resume()
             try await until { player.media?.currentItem?.status == .readyToPlay && player.media?.timeControlStatus == .playing && player.isPlaying && (player.media?.currentTime().seconds ?? 0) > 0.5 }
             let offlineRequests = await cache.networkRequests, offlineProcesses = await runner.starts
-            record("native_offline_playback", offlineRequests == network && offlineProcesses == processCount, "custom resource loader served local audio without network requests or yt-dlp")
+            record("native_offline_playback", offlineRequests == network && offlineProcesses == processCount, "native player served saved audio without outbound network requests or yt-dlp")
             player.pause(); player.enterDeepIdle()
             record("audio_memory_bound", await cache.memoryBytes() <= 6 * Int(MediaCache.chunkSize))
             let queue = Collection(id: "validation-queue", title: "Queue check", creator: "Geet", source: track.url, tracks: [track, track])
@@ -116,6 +116,7 @@ enum RuntimeValidation {
         player.shutdown()
         checks["finished"] = ISO8601DateFormatter().string(from: Date())
         try? Paths.write(checks, to: root.appendingPathComponent("report.json"))
+        return checks["final_pipeline_released"] == "PASS" && !checks.values.contains(where: { $0.hasPrefix("FAIL") })
     }
     private static func until(seconds: Double = 35, _ condition: () -> Bool) async throws {
         let deadline = Date().addingTimeInterval(seconds)

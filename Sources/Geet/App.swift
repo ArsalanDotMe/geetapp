@@ -21,6 +21,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var status: NSStatusItem!
     private let popover = NSPopover()
     private var store: AppStore!
+    #if DEBUG
+    private var captureSignal: DispatchSourceSignal?
+    private var captureSequence = 0
+    private var keyMonitor: Any?
+    private var keyEvents: [String] = []
+    #endif
     func applicationDidFinishLaunching(_ notification: Notification) {
         #if DEBUG
         store = AppStore(preview: CommandLine.arguments.contains("--design-preview"))
@@ -36,13 +42,79 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         popover.behavior = .transient; popover.animates = true; popover.delegate = self
         #if DEBUG
-        if CommandLine.arguments.contains("--capture") { popover.behavior = .applicationDefined }
+        if CommandLine.arguments.contains("--interactive-validation"), let directory = ProcessInfo.processInfo.environment["GEET_VALIDATION_DIR"] {
+            let output = URL(fileURLWithPath: directory)
+            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
+                self?.keyEvents.append("\(event.type.rawValue):\(event.keyCode):\(event.modifierFlags.rawValue):\(event.characters ?? "")")
+                if let self, self.keyEvents.count > 20 { self.keyEvents.removeFirst(self.keyEvents.count - 20) }
+                return event
+            }
+            signal(SIGUSR1, SIG_IGN)
+            captureSignal = DispatchSource.makeSignalSource(signal: SIGUSR1, queue: .main)
+            captureSignal?.setEventHandler { [weak self] in
+                guard let self else { return }
+                self.captureSequence += 1
+                let sequence = self.captureSequence
+                Task { @MainActor in
+                    var state: [String: String] = ["panel_visible": String(self.popover.isShown), "playing": String(self.store.player.isPlaying),
+                        "loading": String(self.store.player.isLoading), "pipeline": String(self.store.player.hasMediaPipeline),
+                        "progress_observer": String(self.store.player.hasProgressObserver), "collections": String(self.store.library.collections.count),
+                        "track": self.store.player.track?.title ?? "", "position": String(self.store.player.media?.currentTime().seconds ?? 0),
+                        "active": String(NSApp.isActive), "key_window": String(NSApp.keyWindow?.windowNumber ?? -1),
+                        "first_responder": String(describing: NSApp.keyWindow?.firstResponder), "key_events": self.keyEvents.joined(separator: "|")]
+                    do { try await self.captureWindow(to: output.appendingPathComponent("ui-\(sequence).png")) }
+                    catch { state["capture_error"] = error.localizedDescription }
+                    try? Paths.write(state, to: output.appendingPathComponent("ui-\(sequence).json"))
+                }
+            }
+            captureSignal?.resume()
+            print("Interactive validation PID: \(ProcessInfo.processInfo.processIdentifier)"); fflush(stdout)
+        }
+        if CommandLine.arguments.contains("--capture") || CommandLine.arguments.contains("--validate-library") || CommandLine.arguments.contains("--interactive-validation") {
+            popover.behavior = .applicationDefined
+        }
         if let index = CommandLine.arguments.firstIndex(of: "--appearance"), CommandLine.arguments.indices.contains(index + 1) {
             NSApp.appearance = NSAppearance(named: CommandLine.arguments[index + 1] == "dark" ? .darkAqua : .aqua)
             popover.appearance = NSApp.appearance
         }
         if CommandLine.arguments.contains("--validate-runtime") {
-            Task { await RuntimeValidation.run(tools: Bundle.main.resourceURL!.appendingPathComponent("Tools")); NSApp.terminate(nil) }
+            Task {
+                let passed = await RuntimeValidation.run(tools: Bundle.main.resourceURL!.appendingPathComponent("Tools"))
+                store.shutdown(); exit(passed ? 0 : 1)
+            }
+        }
+        if CommandLine.arguments.contains("--validate-audio") {
+            Task {
+                let passed = await CompletionValidation.verifyAudio(tools: Bundle.main.resourceURL!.appendingPathComponent("Tools"))
+                store.shutdown(); exit(passed ? 0 : 1)
+            }
+        }
+        if CommandLine.arguments.contains("--validate-library") {
+            Task {
+                // The status item's native host is installed after launch returns.
+                try? await Task.sleep(for: .milliseconds(300))
+                let passed = await CompletionValidation.run(store: store) { screen, destination in
+                    if self.popover.contentViewController != nil {
+                        self.popover.performClose(nil)
+                        // Wait for popoverDidClose to release the old view before
+                        // installing a new one. Close animations are asynchronous.
+                        for _ in 0..<50 {
+                            if self.popover.contentViewController == nil { break }
+                            try await Task.sleep(for: .milliseconds(50))
+                        }
+                    }
+                    self.show(screen: screen, inspectClipboard: false)
+                    try await Task.sleep(for: .seconds(2))
+                    try await self.captureWindow(to: destination)
+                }
+                exit(passed ? 0 : 1)
+            }
+        }
+        if CommandLine.arguments.contains("--verify-deep-idle") {
+            Task {
+                let passed = await CompletionValidation.verifyDeepIdle(tools: Bundle.main.resourceURL!.appendingPathComponent("Tools"))
+                store.shutdown(); exit(passed ? 0 : 1)
+            }
         }
         if let index = CommandLine.arguments.firstIndex(of: "--measure-idle"), CommandLine.arguments.indices.contains(index + 1) {
             RuntimeValidation.measureIdle(store: store, destination: CommandLine.arguments[index + 1])
@@ -87,10 +159,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         editing.submenu = edit; NSApp.mainMenu = main
     }
-    private func show() {
+    private func show(screen: String? = nil, inspectClipboard: Bool = true) {
+        guard !popover.isShown, popover.contentViewController == nil else { return }
         guard let button = status.button else { return }
         let height = min(760, (button.window?.screen?.visibleFrame.height ?? NSScreen.main?.visibleFrame.height ?? 900) - 40)
-        let root = PanelView(store: store, player: store.player, height: height)
+        let root = PanelView(store: store, player: store.player, height: height, startingScreen: screen)
         let host = NSHostingView(rootView: root)
         host.frame = NSRect(x: 0, y: 0, width: 450, height: height)
         let glass = NSGlassEffectView(frame: host.frame)
@@ -99,27 +172,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         popover.contentViewController = controller; popover.contentSize = host.frame.size
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         NSApp.activate()
-        store.panelOpened()
+        controller.view.window?.makeKey()
+        store.panelOpened(inspectClipboard: inspectClipboard)
         #if DEBUG
         if let index = CommandLine.arguments.firstIndex(of: "--capture"), CommandLine.arguments.indices.contains(index + 1) {
             let destination = CommandLine.arguments[index + 1]
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 Task { @MainActor in
                     do {
-                        let content = try await SCShareableContent.currentProcess
-                        let number = self.popover.contentViewController?.view.window?.windowNumber ?? host.window?.windowNumber ?? -1
-                        guard let window = content.windows.first(where: { $0.windowID == CGWindowID(max(0, number)) }) else {
-                            throw GeetError.message("Own window \(number); available windows \(content.windows.map(\.windowID))")
-                        }
-                        let config = SCStreamConfiguration()
-                        config.width = Int(window.frame.width * 2); config.height = Int(window.frame.height * 2)
-                        config.showsCursor = false; config.ignoreShadowsSingleWindow = true
-                        let image = try await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(desktopIndependentWindow: window), configuration: config)
-                        let bitmap = NSBitmapImageRep(cgImage: image)
-                        if let png = bitmap.representation(using: .png, properties: [:]) {
-                            try png.write(to: URL(fileURLWithPath: destination))
-                            try? FileManager.default.removeItem(atPath: destination + ".error.txt")
-                        }
+                        try await self.captureWindow(to: URL(fileURLWithPath: destination))
+                        try? FileManager.default.removeItem(atPath: destination + ".error.txt")
                     } catch {
                         try? error.localizedDescription.write(to: URL(fileURLWithPath: destination + ".error.txt"), atomically: true, encoding: .utf8)
                     }
@@ -129,6 +191,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         #endif
     }
+    #if DEBUG
+    private func captureWindow(to destination: URL) async throws {
+        let content = try await SCShareableContent.currentProcess
+        let number = popover.contentViewController?.view.window?.windowNumber ?? -1
+        guard let window = content.windows.first(where: { $0.windowID == CGWindowID(max(0, number)) }) else {
+            throw GeetError.message("The app’s panel is not visible.")
+        }
+        let config = SCStreamConfiguration()
+        config.width = Int(window.frame.width * 2); config.height = Int(window.frame.height * 2)
+        config.showsCursor = false; config.ignoreShadowsSingleWindow = true
+        let capture = try await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(desktopIndependentWindow: window), configuration: config)
+        let bitmap = NSBitmapImageRep(cgImage: capture)
+        guard let png = bitmap.representation(using: .png, properties: [:]) else { throw GeetError.message("The capture couldn’t be saved.") }
+        Paths.ensure(destination.deletingLastPathComponent())
+        try png.write(to: destination)
+    }
+    #endif
     func popoverDidClose(_ notification: Notification) {
         store.panelClosed()
         // Destroy the SwiftUI tree: invisible controls cannot render or animate.
