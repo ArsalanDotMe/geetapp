@@ -1,0 +1,31 @@
+Test Suite 'All tests' passed at 2026-10-21 20:20:07.369.
+↳ Testing Library Version: 2084
+✔ Test doesNotAdvertisePartialAudioAsOffline() passed after 0.005 seconds.
+✔ Test repeatsAndStops() passed after 0.006 seconds.
+✔ Test preservesOccurrencesAndHistory() passed after 0.006 seconds.
+✔ Test emptyQueueAndInvalidSavedIndex() passed after 0.006 seconds.
+✔ Test automaticRecoveryIsCappedPerTrack() passed after 0.006 seconds.
+✔ Test unsafeFormatCannotEscapeCacheDirectory() passed after 0.007 seconds.
+✔ Test startupDoesNotSpawnAnything() passed after 0.007 seconds.
+✔ Test normalizesPlaylistInsteadOfWatchContext() passed after 0.007 seconds.
+✔ Test normalizesVideos(_:) with 3 test cases passed after 0.007 seconds.
+✔ Test liveHLSIsRecognized() passed after 0.007 seconds.
+✔ Test rejectsUnsupportedOrUnsafeLinks(_:) with 7 test cases passed after 0.007 seconds.
+✔ Test unavailableEntriesAreExcludedButDuplicatesSurvive() passed after 0.007 seconds.
+✔ Test expiredURLsCannotBeUsedForInstantResume() passed after 0.006 seconds.
+✔ Suite QueueTests passed after 0.007 seconds.
+✔ Suite LinkTests passed after 0.007 seconds.
+✔ Suite MetadataTests passed after 0.007 seconds.
+✔ Test persistedStreamCacheIsBoundedAndReusedWithoutProbe() passed after 0.022 seconds.
+✔ Test corruptOfflineFileIsNoLongerAdvertisedAsComplete() passed after 0.024 seconds.
+✔ Test probeExpiresAfter24HoursAndValidatesFileAttributes() passed after 0.026 seconds.
+✔ Test diskReadsHaveFixedMemoryLimitAndWorkWithoutNetwork() passed after 0.026 seconds.
+✔ Suite CacheTests passed after 0.027 seconds.
+✔ Test foregroundPreemptsSpeculativeWork() passed after 0.609 seconds.
+✔ Test serializesConcurrentCalls() passed after 0.609 seconds.
+✔ Test cancelledQueuedRequestDoesNotRun() passed after 1.123 seconds.
+✔ Suite ProcessTests passed after 1.123 seconds.
+✔ Test concurrentRequestsForOneStreamShareOneResolve() passed after 1.318 seconds.
+✔ Test failureCooldownPreventsRespawning() passed after 1.505 seconds.
+✔ Suite DependencyAndCooldownTests passed after 1.505 seconds.
+✔ Test run with 22 tests in 6 suites passed after 1.505 seconds.
