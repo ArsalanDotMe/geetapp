@@ -24,9 +24,34 @@ import Testing
         var queue = PlaybackQueue(); queue.reset(count: 2, start: 0, shuffled: false)
         #expect(queue.moveNext(repeatMode: .one, automatic: true) == 0)
         #expect(queue.moveNext(repeatMode: .one) == 1)
-        #expect(queue.moveNext(repeatMode: .off) == nil)
+        #expect(queue.moveNext(repeatMode: .off, automatic: true) == nil)
         #expect(queue.moveNext(repeatMode: .all) == 0)
         #expect(RepeatMode.off.next == .all); #expect(RepeatMode.all.next == .one); #expect(RepeatMode.one.next == .off)
+    }
+    @Test(arguments: RepeatMode.allCases, [false, true])
+    func manualNavigationLoops(mode: RepeatMode, shuffled: Bool) {
+        var queue = PlaybackQueue()
+        queue.reset(count: 5, start: 0, shuffled: shuffled)
+        let order = queue.order
+        #expect(queue.movePrevious() == order.last)
+        #expect(queue.moveNext(repeatMode: mode) == order.first)
+        for expected in order.dropFirst() {
+            #expect(queue.moveNext(repeatMode: mode) == expected)
+        }
+        #expect(queue.moveNext(repeatMode: mode) == order.first)
+        for expected in order.reversed() {
+            #expect(queue.movePrevious() == expected)
+        }
+    }
+    @Test(arguments: RepeatMode.allCases)
+    func emptyAndSingleTrackNavigation(mode: RepeatMode) {
+        var queue = PlaybackQueue()
+        #expect(queue.moveNext(repeatMode: mode) == nil)
+        #expect(queue.movePrevious() == nil)
+        queue.reset(count: 1, start: 0, shuffled: false)
+        #expect(queue.moveNext(repeatMode: mode) == 0)
+        #expect(queue.movePrevious() == 0)
+        #expect(queue.moveNext(repeatMode: mode, automatic: true) == (mode == .off ? nil : 0))
     }
     @Test func emptyQueueAndInvalidSavedIndex() {
         var queue = PlaybackQueue(); queue.reset(count: 0, start: 30, shuffled: true); #expect(queue.current == nil)

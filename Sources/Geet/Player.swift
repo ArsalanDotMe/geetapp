@@ -118,8 +118,6 @@ final class Player: ObservableObject {
         load(collection.tracks[index], at: 0)
     }
     func previous() {
-        let current = media?.currentTime().seconds ?? position
-        if current.isFinite && current > 3 && track?.isLive != true { seek(0); return }
         snapshot()
         guard let index = queue.movePrevious(), let collection else { return }
         recovery.reset(collection.tracks[index].id); load(collection.tracks[index], at: 0)

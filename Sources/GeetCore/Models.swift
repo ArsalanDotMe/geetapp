@@ -101,15 +101,18 @@ public struct PlaybackQueue: Sendable {
         if shuffled { order = [start] + (0..<count).filter { $0 != start }.shuffled(); cursor = 0 }
         else { order = Array(0..<count); cursor = start }
     }
+    /// Manual skips wrap; only natural track endings follow the repeat setting.
     public mutating func moveNext(repeatMode: RepeatMode, automatic: Bool = false) -> Int? {
         guard !order.isEmpty else { return nil }
         if automatic && repeatMode == .one { return current }
         if cursor + 1 < order.count { cursor += 1; return current }
-        if repeatMode == .all { cursor = 0; return current }
+        if !automatic || repeatMode == .all { cursor = 0; return current }
         return nil
     }
     public mutating func movePrevious() -> Int? {
-        guard cursor > 0 else { return current }; cursor -= 1; return current
+        guard !order.isEmpty else { return nil }
+        cursor = cursor > 0 ? cursor - 1 : order.count - 1
+        return current
     }
     public func peekNext(repeatMode: RepeatMode) -> Int? {
         if repeatMode == .one { return current }

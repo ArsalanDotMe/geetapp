@@ -8,7 +8,8 @@ let package = Package(
     targets: [
         .target(name: "GeetCore"),
         .executableTarget(name: "Geet", dependencies: ["GeetCore"], resources: [.process("Resources")]),
-        .testTarget(name: "GeetCoreTests", dependencies: ["GeetCore"])
+        .testTarget(name: "GeetCoreTests", dependencies: ["GeetCore"]),
+        .testTarget(name: "GeetTests", dependencies: ["Geet", "GeetCore"])
     ],
     swiftLanguageModes: [.v5]
 )
