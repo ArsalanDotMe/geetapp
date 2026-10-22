@@ -63,7 +63,7 @@ For indexed DASH AAC, geet maps the existing fragment index to a small, immutabl
 zsh scripts/test.sh
 ```
 
-The 31 tests cover link normalization, queue history and repeat, duplicate entries, bounded metadata, resolver serialization and preemption, shared resolves, dependency cache reuse, failure cooldowns, disk-cache integrity, shared-download cancellation, memory-only streaming, DASH fragment indexing, initialization headers, and HTTP byte ranges.
+The unit tests cover link normalization, queue history and repeat, duplicate entries, bounded metadata, resolver serialization and preemption, shared resolves, dependency cache reuse, failure cooldowns, disk-cache integrity, shared-download cancellation, memory-only streaming, DASH fragment indexing, initialization headers, HTTP byte ranges, and customer-facing error messages that keep provider and system diagnostics out of the primary alert.
 
 Debug-only runtime checks use isolated data, muted playback, real public YouTube content, and the actual native player:
 
@@ -77,7 +77,7 @@ Additional debug checks are `--validate-library`, `--validate-audio`, and `--ver
 
 The paused deadline was also exercised over the actual 600 seconds, with no additional helpers and a successful warm resume. The short runtime suite injects a 0.25-second deadline for repeatable teardown checks. Offline playback is checked with unchanged outbound request and helper counters. Native Accessibility testing covers actual clicks and keyboard input. The owner separately confirmed audible playback, hardware Play/Pause and Next, and menu-bar panel close/reopen. These checks do not substitute for a long-running battery measurement.
 
-The [selected design](Design/References/option-2-cover-stories.png) is retained for future reference. The [completion review](Design/Validation/Completion/README.md) contains fresh native captures, the independent design critique, runtime evidence, and acceptance limits. [Initial validation](Design/Validation/README.md) is retained as historical evidence. `--design-preview` uses a separate, in-memory fixture library solely for design review; no sample playlists are inserted into the real library. It and the runtime/interaction harnesses are excluded from release builds.
+The selected [Mist & Slate palette](Design/References/mist-and-slate.png) supports light and dark appearance, native Liquid Glass controls, and continuous artwork fades. The [original composition](Design/References/option-2-cover-stories.png) is also retained. The [refinement review](design-qa.md) records the current comparison and acceptance checks. The [completion review](Design/Validation/Completion/README.md) contains fresh native captures, the independent design critique, runtime evidence, and acceptance limits. [Initial validation](Design/Validation/README.md) is retained as historical evidence. `--design-preview` uses a separate, in-memory fixture library solely for design review; no sample playlists are inserted into the real library. It and the runtime/interaction harnesses are excluded from release builds.
 
 ## Privacy and dependencies
 

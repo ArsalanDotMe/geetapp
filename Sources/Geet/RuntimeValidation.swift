@@ -87,7 +87,7 @@ enum RuntimeValidation {
             record("native_offline_playback", offlineRequests == network && offlineProcesses == processCount, "native player served saved audio without outbound network requests or yt-dlp")
             player.pause(); player.enterDeepIdle()
             record("audio_memory_bound", await cache.memoryBytes() <= 6 * Int(MediaCache.chunkSize))
-            let queue = Collection(id: "validation-queue", title: "Queue check", creator: "Geet", source: track.url, tracks: [track, track])
+            let queue = Collection(id: "validation-queue", title: "Queue check", creator: "geet", source: track.url, tracks: [track, track])
             player.repeatMode = .off; player.play(queue, index: 0)
             try await until { player.media?.timeControlStatus == .playing }
             player.seek(max(0, player.clock.duration - 0.25))

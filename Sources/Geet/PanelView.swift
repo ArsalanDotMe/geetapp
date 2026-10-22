@@ -2,12 +2,6 @@ import SwiftUI
 import ServiceManagement
 import GeetCore
 
-private let sage = Color(nsColor: NSColor(name: nil) { appearance in
-    appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        ? NSColor(red: 0.66, green: 0.77, blue: 0.60, alpha: 1)
-        : NSColor(red: 0.32, green: 0.40, blue: 0.29, alpha: 1)
-})
-
 struct PanelView: View {
     @ObservedObject var store: AppStore
     @ObservedObject var player: Player
@@ -22,6 +16,7 @@ struct PanelView: View {
     @State private var search = ""
     @State private var link = ""
     @FocusState private var linkFocused: Bool
+    @FocusState private var searchFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
         VStack(spacing: 12) {
@@ -30,9 +25,10 @@ struct PanelView: View {
             else if support { supportView }
             else if let id = detail, let collection = store.collection(for: id) { detailView(collection) }
             else {
-                CollectionPicker(selection: $tab).frame(height: 28)
+                CollectionPicker(selection: $tab).frame(height: 32)
                 if searching {
-                    TextField(tab == 0 ? "Search your library" : "Search Discover", text: $search).textFieldStyle(.roundedBorder)
+                    TextField(tab == 0 ? "Search your library" : "Search Discover", text: $search).textFieldStyle(.roundedBorder).focused($searchFocused)
+                        .accessibilityIdentifier("playlist-search").onAppear { searchFocused = true }
                         .onExitCommand { searching = false; search = "" }
                 }
                 if tab == 0 {
@@ -67,21 +63,19 @@ struct PanelView: View {
                                   support = false
                                   detail = isShowingQueue ? nil : queueID
                               })
-            } else if !settings && !support && detail == nil {
-                    HStack(spacing: 7) { Image(systemName: "waveform"); Text("A little room for your music.") }
-                        .font(.system(size: 12)).foregroundStyle(.secondary).frame(height: 30)
             }
         }
-        .padding(18)
-        .frame(width: 450, height: height)
-        .tint(sage)
-        .background(Color(nsColor: .windowBackgroundColor).opacity(0.30))
+        .padding(GeetStyle.inset)
+        .frame(width: GeetStyle.panelWidth, height: height)
+        .tint(GeetStyle.accent)
+        .foregroundStyle(GeetStyle.ink)
+        .background(GeetStyle.panel.opacity(0.58))
         .allowsHitTesting(!adding)
         .accessibilityHidden(adding)
         .overlay { if adding { addOverlay } }
         .animation(reduceMotion ? nil : .smooth(duration: 0.22), value: tab)
         .animation(reduceMotion ? nil : .smooth(duration: 0.22), value: detail)
-        .alert("Geet", isPresented: Binding(get: { store.message != nil || player.error != nil }, set: { if !$0 { store.message = nil; player.error = nil } })) {
+        .alert("geet", isPresented: Binding(get: { store.message != nil || player.error != nil }, set: { if !$0 { store.message = nil; player.error = nil } })) {
             Button("OK") { store.message = nil; player.error = nil }
         } message: { Text(store.message ?? player.error ?? "") }
         .onDrop(of: [.url, .plainText], isTargeted: nil) { providers in
@@ -108,6 +102,8 @@ struct PanelView: View {
                 case "add": adding = true; linkFocused = true
                 case "search": searching = true; search = "Chillhop"
                 case "support": support = true
+                case "empty": if store.preview { store.library.collections = [] }
+                case "no-results": searching = true; search = "no matching music"
                 default: break
                 }
             }
@@ -115,42 +111,56 @@ struct PanelView: View {
         }
     }
     private var header: some View {
-        HStack(spacing: 14) {
-            if detail != nil || settings || support {
-                Button { detail = nil; settings = false; support = false } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 14, weight: .semibold)).frame(width: 28, height: 28).contentShape(Rectangle())
-                }.buttonStyle(.plain).help(tab == 1 ? "Back to Discover" : "Back to library").accessibilityLabel(tab == 1 ? "Back to Discover" : "Back to library")
+        GlassEffectContainer(spacing: 10) {
+            HStack(spacing: 10) {
+                if detail != nil || settings || support {
+                    Button { detail = nil; settings = false; support = false } label: {
+                        Image(systemName: "chevron.left").font(.system(size: 13, weight: .medium))
+                            .frame(width: 32, height: 32).contentShape(Circle())
+                    }.buttonStyle(.plain).geetGlass(in: Circle(), interactive: true)
+                        .help(tab == 1 ? "Back to Discover" : "Back to library").accessibilityLabel(tab == 1 ? "Back to Discover" : "Back to library").accessibilityIdentifier("back-to-library")
+                } else {
+                    ListenerMark().frame(width: 30, height: 30)
+                }
+                if settings || support {
+                    Text(settings ? "Settings" : "Support geet").font(BrandTypography.editorial)
+                }
+                Spacer()
+                if !settings && !support && detail == nil {
+                    Button { searching.toggle(); if !searching { search = "" } } label: {
+                        Image(systemName: "magnifyingglass").font(.system(size: 14)).frame(width: 32, height: 32).contentShape(Circle())
+                    }.buttonStyle(.plain).geetGlass(in: Circle(), interactive: true)
+                        .help("Search playlists").accessibilityLabel("Search playlists").accessibilityIdentifier("search-playlists")
+                    Button { adding = true; linkFocused = true } label: {
+                        Image(systemName: "plus").font(.system(size: 17)).frame(width: 32, height: 32).contentShape(Circle())
+                    }.buttonStyle(.plain).geetGlass(in: Circle(), interactive: true)
+                        .help("Add a YouTube link").accessibilityLabel("Add a YouTube link").accessibilityIdentifier("add-playlist")
+                }
+                Menu {
+                    Button("Settings…") { settings = true; support = false; detail = nil }
+                    Button("Support geet…") { support = true; settings = false; detail = nil }
+                    Divider()
+                    Button("Quit geet", role: .destructive) { NSApp.terminate(nil) }.keyboardShortcut("q")
+                } label: {
+                    Image(systemName: "gearshape").font(.system(size: 15)).frame(width: 32, height: 32)
+                        .geetGlass(in: Circle(), interactive: true).contentShape(Circle())
+                }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                    .help("Settings and more").accessibilityLabel("Settings and more").accessibilityIdentifier("settings-menu")
             }
-            Text(settings ? "Settings" : support ? "Support Geet" : "Geet")
-                .font(.system(size: 22, weight: .bold, design: .rounded)).tracking(-0.5)
-            Spacer()
-            if !settings && !support && detail == nil {
-                Button { searching.toggle(); if !searching { search = "" } } label: { Image(systemName: "magnifyingglass").frame(width: 28, height: 28).contentShape(Rectangle()) }
-                    .buttonStyle(.plain).help("Search playlists").accessibilityLabel("Search playlists")
-                Button { adding = true; linkFocused = true } label: { Image(systemName: "plus").font(.system(size: 20, weight: .regular)).frame(width: 28, height: 28).contentShape(Rectangle()) }
-                    .buttonStyle(.plain).help("Add a YouTube link").accessibilityLabel("Add playlist").accessibilityIdentifier("add-playlist")
-            }
-            Menu {
-                Button("Settings…") { settings = true; support = false; detail = nil }
-                Button("Support Geet…") { support = true; settings = false; detail = nil }
-                Divider()
-                Button("Quit Geet", role: .destructive) { NSApp.terminate(nil) }.keyboardShortcut("q")
-            } label: { Image(systemName: "gearshape").font(.system(size: 17)) }
-                .menuStyle(.borderlessButton).menuIndicator(.hidden).tint(.primary).fixedSize().help("Settings and more").accessibilityLabel("Settings and more")
-        }.foregroundStyle(.primary).frame(height: 29)
+        }.foregroundStyle(GeetStyle.ink).frame(height: 32)
     }
     private var filtered: [Collection] { store.library.collections.filter { search.isEmpty || $0.title.localizedCaseInsensitiveContains(search) || $0.creator.localizedCaseInsensitiveContains(search) } }
     @ViewBuilder private var libraryView: some View {
         if filtered.isEmpty {
             VStack(spacing: 18) {
-                Text(search.isEmpty ? "Your library is empty." : "No playlists found.")
-                    .font(.system(size: 21, weight: .semibold, design: .rounded)).multilineTextAlignment(.center).padding(.horizontal, 18)
-                Text(search.isEmpty ? "Add your favourites or head over to Discover to start listening." : "Try a different name or creator.")
-                    .font(.system(size: 13)).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.horizontal, 26)
+                Text(search.isEmpty ? "Your library is empty." : "No playlists found")
+                    .font(BrandTypography.editorial).multilineTextAlignment(.center).padding(.horizontal, 18)
+                Text(search.isEmpty ? "Add your favourites or head over to Discover to start listening." : "Try another title or creator.")
+                    .font(.system(size: 13)).foregroundStyle(GeetStyle.secondary).multilineTextAlignment(.center).padding(.horizontal, 26)
                 if search.isEmpty {
                     Button { adding = true; linkFocused = true } label: { Label("Add a playlist", systemImage: "plus") }
                         .buttonStyle(.glassProminent).controlSize(.large)
-                    Button("Find something in Discover") { tab = 1 }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(.secondary)
+                    Button("Browse Discover") { tab = 1 }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(GeetStyle.secondary)
                 }
             }.padding(.top, 40).padding(.bottom, 18)
         } else {
@@ -163,7 +173,7 @@ struct PanelView: View {
     }
     private func hero(_ collection: Collection) -> some View {
         ZStack(alignment: .bottom) {
-            CoverArt(url: collection.thumbnail, store: store.artwork, seed: collection.id).frame(height: 190).clipped()
+            CoverArt(url: collection.thumbnail, store: store.artwork, seed: collection.id).frame(height: 180).clipped()
             LinearGradient(colors: [.clear, .black.opacity(0.12), .black.opacity(0.85)], startPoint: .center, endPoint: .bottom).allowsHitTesting(false)
             HStack(alignment: .bottom, spacing: 10) {
                 Button { detail = collection.id } label: {
@@ -187,38 +197,36 @@ struct PanelView: View {
                 }.frame(height: 40)
             }.padding(14)
         }
-        .frame(height: 190).clipShape(.rect(cornerRadius: 13))
+        .frame(height: 180).clipShape(.rect(cornerRadius: GeetStyle.cardRadius))
         .contentShape(Rectangle())
         .accessibilityElement(children: .contain)
         .accessibilityLabel(collection.title)
     }
-    @Environment(\.colorScheme) private var colorScheme
     private func playlistBand(_ collection: Collection) -> some View {
-        let base = colorScheme == .dark ? Color(nsColor: .controlBackgroundColor) : Color(red: 0.96, green: 0.94, blue: 0.89)
-        return ZStack {
+        ZStack {
             CoverArt(url: collection.thumbnail, store: store.artwork, seed: collection.id)
-            LinearGradient(stops: [.init(color: base, location: 0), .init(color: base.opacity(0.99), location: 0.27),
-                                   .init(color: base.opacity(0.86), location: 0.5), .init(color: base.opacity(0.08), location: 1)], startPoint: .leading, endPoint: .trailing).allowsHitTesting(false)
+            ArtworkFade()
             HStack(spacing: 10) {
                 Button { detail = collection.id } label: {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(collection.title).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                        Text(collection.title).font(.system(size: 14, weight: .medium)).lineLimit(1)
                         HStack(spacing: 4) {
                             Text(collection.subtitle).lineLimit(1)
                             if collection.tracks.allSatisfy({ store.savedTrackIDs.contains($0.id) }) || store.preview && collection.keepsOffline {
-                                Image(systemName: "arrow.down.circle.fill").foregroundStyle(sage).help("Available offline")
+                                Image(systemName: "arrow.down.circle.fill").foregroundStyle(GeetStyle.accent).help("Available offline")
                             }
-                        }.font(.system(size: 11)).foregroundStyle(.secondary)
-                        if let progress = store.downloads[collection.id] { ProgressView(value: progress).frame(width: 140).tint(sage) }
+                        }.font(.system(size: 12)).foregroundStyle(GeetStyle.secondary)
+                        if let progress = store.downloads[collection.id] { ProgressView(value: progress).frame(width: 140).tint(GeetStyle.accent) }
                     }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                 }.buttonStyle(.plain).help("View tracks").accessibilityIdentifier("library-open-\(collection.id)")
                 playButton(collection)
                 Button { detail = collection.id } label: {
-                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(.primary).frame(width: 28, height: 32).contentShape(Rectangle())
+                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.5), radius: 2).frame(width: 28, height: 32).contentShape(Rectangle())
                 }.buttonStyle(.plain).help("View tracks in \(collection.title)").accessibilityLabel("View tracks in \(collection.title)")
             }.padding(.horizontal, 13)
         }
-        .frame(height: 66).clipShape(.rect(cornerRadius: 11))
+        .frame(height: 64).clipShape(.rect(cornerRadius: GeetStyle.cardRadius))
         .contentShape(Rectangle())
         .contextMenu { collectionMenuItems(collection) }
     }
@@ -229,16 +237,16 @@ struct PanelView: View {
             Group {
                 if player.collectionID == collection.id && player.isLoading { ProgressView().controlSize(.small) }
                 else { Image(systemName: active || selectedPreview ? "pause.fill" : "play.fill").font(.system(size: prominent ? 16 : 13, weight: .semibold)).offset(x: active || selectedPreview ? 0 : 1) }
-            }.foregroundStyle(Color.black.opacity(0.85)).frame(width: prominent ? 40 : 34, height: prominent ? 40 : 34)
-                .background(.white.opacity(prominent ? 0.94 : 0.89), in: Circle())
+            }.foregroundStyle(GeetStyle.artworkControlInk).frame(width: prominent ? 40 : 34, height: prominent ? 40 : 34)
+                .geetGlass(in: Circle(), interactive: true, tint: GeetStyle.artworkControlFill)
         }.buttonStyle(PressScale()).help(active ? "Pause \(collection.title)" : "Play \(collection.title)")
             .accessibilityLabel(active ? "Pause \(collection.title)" : "Play \(collection.title)")
             .accessibilityIdentifier("library-play-\(collection.id)")
     }
     private func collectionMenu(_ collection: Collection, light: Bool = false) -> some View {
         Menu { collectionMenuItems(collection) } label: {
-            Image(systemName: "ellipsis").font(.system(size: 15)).foregroundStyle(light ? .white : .primary)
-                .frame(width: 30, height: 34).background(.white.opacity(light ? 0.16 : 0), in: Circle()).contentShape(Circle())
+            Image(systemName: "ellipsis").font(.system(size: 15)).foregroundStyle(GeetStyle.artworkControlInk)
+                .frame(width: 30, height: 34).geetGlass(in: Circle(), interactive: true, tint: GeetStyle.artworkControlFill).contentShape(Circle())
         }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(light ? .white : .primary).fixedSize().help("Playlist options").accessibilityLabel("Options for \(collection.title)").accessibilityIdentifier("collection-options-\(collection.id)")
     }
     @ViewBuilder private func collectionMenuItems(_ collection: Collection) -> some View {
@@ -271,33 +279,33 @@ struct PanelView: View {
         VStack(spacing: 12) {
             hero(collection)
             HStack {
-                Text("\(collection.tracks.count) \(collection.tracks.count == 1 ? "item" : "tracks")").font(.system(size: 12)).foregroundStyle(.secondary)
+                Text("\(collection.tracks.count) \(collection.tracks.count == 1 ? "track" : "tracks")").font(.system(size: 12)).foregroundStyle(GeetStyle.secondary)
                 Spacer(); collectionMenu(collection)
             }
-            if collection.truncated { Text("Showing the first 1,000 tracks.").font(.system(size: 12)).foregroundStyle(.secondary) }
+            if collection.truncated { Text("Showing the first 1,000 tracks.").font(.system(size: 12)).foregroundStyle(GeetStyle.secondary) }
             ScrollView {
                 LazyVStack(spacing: 2) {
                     ForEach(Array(collection.tracks.enumerated()), id: \.offset) { index, track in
                         Button { store.play(collection, index: index) } label: {
                             HStack(spacing: 10) {
                                 if player.collectionID == collection.id && player.currentIndex == index {
-                                    Image(systemName: "waveform").foregroundStyle(sage).frame(width: 24).accessibilityLabel("Current track")
+                                    Image(systemName: "waveform").foregroundStyle(GeetStyle.accent).frame(width: 24).accessibilityLabel("Current track")
                                 } else {
-                                    Text(String(index + 1)).font(.system(size: 11).monospacedDigit()).foregroundStyle(.tertiary).frame(width: 24)
+                                    Text(String(index + 1)).font(.system(size: 11).monospacedDigit()).foregroundStyle(GeetStyle.secondary).frame(width: 24)
                                 }
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(track.title).font(.system(size: 13, weight: .medium)).lineLimit(2)
-                                    Text(track.artist).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                                    Text(track.artist).font(.system(size: 12)).foregroundStyle(GeetStyle.secondary).lineLimit(1)
                                 }
                                 Spacer(minLength: 4)
-                                if store.savedTrackIDs.contains(track.id) { Image(systemName: "arrow.down.circle.fill").foregroundStyle(sage).font(.system(size: 11)) }
-                                Text(track.isLive ? "Live" : timeLabel(track.duration ?? 0)).font(.system(size: 11).monospacedDigit()).foregroundStyle(.secondary)
+                                if store.savedTrackIDs.contains(track.id) { Image(systemName: "arrow.down.circle.fill").foregroundStyle(GeetStyle.accent).font(.system(size: 11)) }
+                                Text(track.isLive ? "Live" : timeLabel(track.duration ?? 0)).font(.system(size: 11).monospacedDigit()).foregroundStyle(GeetStyle.secondary)
                             }.padding(.vertical, 9).padding(.horizontal, 6).contentShape(Rectangle())
                         }.buttonStyle(.plain)
-                            .background(player.collectionID == collection.id && player.currentIndex == index ? sage.opacity(0.1) : .clear, in: .rect(cornerRadius: 8))
+                            .background(player.collectionID == collection.id && player.currentIndex == index ? GeetStyle.accent.opacity(0.1) : .clear, in: .rect(cornerRadius: 8))
                     }
                 }
-            }.scrollIndicators(.hidden)
+            }.scrollIndicators(.never)
         }.frame(maxHeight: .infinity)
     }
     private var settingsView: some View {
@@ -306,45 +314,46 @@ struct PanelView: View {
                 GroupBox {
                     VStack(alignment: .leading, spacing: 14) {
                         Toggle("Open at login", isOn: Binding(get: { SMAppService.mainApp.status == .enabled }, set: store.setLogin))
-                        Text("Geet stays in your menu bar and waits until you press Play.").font(.system(size: 12)).foregroundStyle(.secondary)
+                        Text("geet opens quietly in your menu bar.").font(.system(size: 12)).foregroundStyle(GeetStyle.secondary)
                     }.padding(8)
                 }
                 GroupBox("Offline listening") {
                     VStack(alignment: .leading, spacing: 12) {
-                        Toggle("Save audio as I listen", isOn: Binding(get: { store.library.automaticCache }, set: store.setAutomaticCache)).disabled(!store.offlineEnabled)
-                        Text("The listening cache keeps up to 2 GB. Playlists you choose to keep offline stay saved, within 10 GB total.")
-                            .font(.system(size: 12)).foregroundStyle(.secondary)
+                        Toggle("Save music as I listen", isOn: Binding(get: { store.library.automaticCache }, set: store.setAutomaticCache)).disabled(!store.offlineEnabled)
+                        Text("Save up to 2 GB as you listen. Music you keep offline shares a 10 GB total limit.")
+                            .font(.system(size: 12)).foregroundStyle(GeetStyle.secondary)
                         HStack {
                             Text(ByteCountFormatter.string(fromByteCount: store.storageBytes, countStyle: .file)).font(.system(size: 13, weight: .medium))
                             Spacer(); Button("Clear listening cache") { store.clearAutomaticCache() }
                         }
                         if !store.downloads.isEmpty { Button("Cancel download") { store.cancelDownload() } }
-                        if !store.offlineEnabled { Button("Unlock offline listening") { settings = false; support = true } }
+                        if !store.offlineEnabled { Text("Offline listening is coming soon").font(.system(size: 12)).foregroundStyle(GeetStyle.secondary) }
                         #if DEBUG
-                        Text("Development build: offline listening is enabled for testing.").font(.system(size: 11)).foregroundStyle(.secondary)
+                        Text("Development build: offline listening is enabled for testing.").font(.system(size: 11)).foregroundStyle(GeetStyle.secondary)
                         #endif
                     }.padding(8)
                 }
                 GroupBox("YouTube playback") {
                     HStack {
                         Text(store.dependencyText).font(.system(size: 12)).textSelection(.enabled)
-                        Spacer(); Button("Recheck") { store.recheck() }
+                        Spacer(); Button("Check again") { store.recheck() }
                     }.padding(8)
                 }
-                Button("Support Geet") { settings = false; support = true }.buttonStyle(.plain).foregroundStyle(sage)
-                Text("Geet 0.1 · Made for a quieter desktop").font(.system(size: 11)).foregroundStyle(.tertiary)
-            }.padding(.top, 10)
-        }.frame(maxHeight: .infinity)
+                Button("Support geet") { settings = false; support = true }.buttonStyle(.plain).foregroundStyle(GeetStyle.accent)
+                Text("geet 0.1").font(.system(size: 11)).foregroundStyle(GeetStyle.secondary)
+            }.padding(.top, 6).padding(.bottom, 4)
+                .groupBoxStyle(GeetSettingsGroupStyle()).toggleStyle(.switch).controlSize(.small)
+        }.scrollIndicators(.never).frame(maxHeight: .infinity)
     }
     private var supportView: some View {
         VStack(spacing: 18) {
             Spacer()
-            Image(systemName: "heart.circle").font(.system(size: 54, weight: .ultraLight)).foregroundStyle(sage)
-            Text("Keep your music close.").font(.system(size: 26, weight: .semibold, design: .rounded))
-            Text("A one-time $5 contribution unlocks offline listening and helps keep Geet going.")
-                .font(.system(size: 14)).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.horizontal, 28)
-            Text("Checkout is coming soon. Streaming is free.").font(.system(size: 12)).foregroundStyle(.secondary)
-            Button("Back to my music") { support = false }.buttonStyle(.glassProminent).controlSize(.large)
+            ListenerMark().frame(width: 88, height: 88).padding(.bottom, 4)
+            Text("Keep your music close").font(BrandTypography.support)
+            Text("A one-time $5 contribution will unlock offline listening.")
+                .font(.system(size: 14)).foregroundStyle(GeetStyle.secondary).multilineTextAlignment(.center).padding(.horizontal, 28)
+            Text("Checkout is coming soon. Streaming is free.").font(.system(size: 12)).foregroundStyle(GeetStyle.secondary)
+            Button("Back to library") { tab = 0; support = false }.buttonStyle(.glassProminent).controlSize(.large)
             Spacer()
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -352,15 +361,17 @@ struct PanelView: View {
         ZStack {
             Color.black.opacity(0.16).onTapGesture { adding = false }
             VStack(alignment: .leading, spacing: 17) {
-                HStack { Text("Bring your music.").font(.system(size: 22, weight: .semibold, design: .rounded)); Spacer(); Button { adding = false } label: { Image(systemName: "xmark").frame(width: 28, height: 28).contentShape(Rectangle()) }.buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("close-add") }
-                Text("Paste a YouTube playlist, a long mix, or a live radio link.").font(.system(size: 13)).foregroundStyle(.secondary)
-                TextField("https://youtube.com/playlist?list=…", text: $link).textFieldStyle(.roundedBorder).focused($linkFocused)
+                HStack { Text("Add your music").font(BrandTypography.editorial); Spacer(); Button { adding = false } label: { Image(systemName: "xmark").frame(width: 28, height: 28).contentShape(Rectangle()) }.buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("close-add") }
+                Text("Paste a YouTube playlist, mix, or live radio link.").font(.system(size: 13)).foregroundStyle(GeetStyle.secondary)
+                TextField("YouTube link", text: $link).textFieldStyle(.roundedBorder).focused($linkFocused)
                     .onSubmit { submitLink() }.accessibilityIdentifier("youtube-link")
                 HStack {
                     Button("Paste") { link = NSPasteboard.general.string(forType: .string) ?? "" }.buttonStyle(.plain)
                     Spacer(); Button("Add to library") { submitLink() }.buttonStyle(.glassProminent).disabled(store.busy || link.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityIdentifier("confirm-add")
                 }
-            }.padding(24).frame(width: 382).background(.regularMaterial, in: .rect(cornerRadius: 20)).shadow(color: .black.opacity(0.12), radius: 24, y: 10)
+            }.padding(24).frame(width: 382).background(GeetStyle.panel, in: .rect(cornerRadius: 20))
+                .overlay(RoundedRectangle(cornerRadius: 20).stroke(GeetStyle.secondary.opacity(0.22), lineWidth: 0.5).allowsHitTesting(false))
+                .shadow(color: GeetStyle.ink.opacity(0.15), radius: 24, y: 10)
         }.onExitCommand { adding = false }.task {
             // Wait for the overlay's native field to join the key window.
             linkFocused = false
@@ -391,7 +402,6 @@ struct TransportView: View {
     @State private var scrubbing = false
     @State private var scrubPosition = 0.0
     @State private var volumeOpen = false
-    @Environment(\.colorScheme) private var colorScheme
     private var elapsed: Double { preview ? 754 : scrubbing ? scrubPosition : clock.position }
     private var duration: Double { preview ? 2538 : max(clock.duration, 1) }
     var body: some View {
@@ -400,13 +410,13 @@ struct TransportView: View {
                 CoverArt(url: player.track?.thumbnail, store: artwork).frame(width: compact ? 32 : 43, height: compact ? 32 : 43).clipShape(.rect(cornerRadius: 7))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(player.track?.title ?? "After Hours").font(.system(size: 13, weight: .semibold)).lineLimit(1)
-                    Text(preview ? "Late Night Coding" : player.collectionTitle).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                    Text(preview ? "Late Night Coding" : player.collectionTitle).font(.system(size: 12)).foregroundStyle(GeetStyle.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 6)
                 Button(action: showQueue) { Image(systemName: "list.bullet").font(.system(size: 15)).frame(width: 28, height: 28).contentShape(Rectangle()) }.buttonStyle(.plain).help("View playlist tracks").accessibilityLabel("View playlist tracks").accessibilityIdentifier("show-queue")
             }
             if player.track?.isLive == true {
-                HStack(spacing: 5) { Circle().fill(sage).frame(width: 5, height: 5); Text("Live radio").font(.system(size: 10)); Spacer() }.padding(.vertical, 3)
+                HStack(spacing: 5) { Circle().fill(GeetStyle.accent).frame(width: 5, height: 5); Text("Live radio").font(.system(size: 10)); Spacer() }.padding(.vertical, 3)
             } else {
                 HStack(spacing: 9) {
                     Text(timeLabel(elapsed)).frame(minWidth: 31, alignment: .leading)
@@ -415,7 +425,7 @@ struct TransportView: View {
                         else { player.seek(scrubPosition); scrubbing = false }
                     }).controlSize(.mini).accessibilityLabel("Playback position")
                     Text(timeLabel(preview ? 2538 : clock.duration)).frame(minWidth: 31, alignment: .trailing)
-                }.font(.system(size: 9).monospacedDigit()).foregroundStyle(.secondary)
+                }.font(.system(size: 10).monospacedDigit()).foregroundStyle(GeetStyle.secondary)
             }
             HStack(spacing: 16) {
                 Spacer(minLength: 0)
@@ -423,12 +433,13 @@ struct TransportView: View {
                 transportButton("backward.end.fill", label: "Previous", action: player.previous)
                 Button { player.toggle() } label: {
                     Group { if player.isLoading { ProgressView().controlSize(.small) } else { Image(systemName: player.isPlaying || preview ? "pause.fill" : "play.fill").font(.system(size: 18, weight: .medium)) } }
-                        .foregroundStyle(colorScheme == .dark ? Color.black.opacity(0.85) : .white).frame(width: compact ? 36 : 43, height: compact ? 36 : 43).background(sage, in: Circle())
+                        .foregroundStyle(GeetStyle.accentInk).frame(width: compact ? 36 : 43, height: compact ? 36 : 43)
+                        .glassEffect(.regular.tint(GeetStyle.accent).interactive(), in: Circle())
                 }.buttonStyle(PressScale()).help(player.isLoading ? "Cancel playback" : player.isPlaying ? "Pause" : "Play").accessibilityLabel(player.isLoading ? "Cancel playback" : player.isPlaying ? "Pause" : "Play")
                     .keyboardShortcut(acceptsSpace ? KeyboardShortcut(.space, modifiers: []) : nil)
                     .accessibilityIdentifier("transport-play")
                 transportButton("forward.end.fill", label: "Next", action: { player.next() })
-                transportButton(player.repeatMode == .one ? "repeat.1" : "repeat", label: "Repeat: \(player.repeatMode.rawValue)", active: player.repeatMode != .off, action: player.cycleRepeat)
+                transportButton(player.repeatMode == .one ? "repeat.1" : "repeat", label: player.repeatMode == .off ? "Repeat off" : player.repeatMode == .all ? "Repeat playlist" : "Repeat track", active: player.repeatMode != .off, action: player.cycleRepeat)
                 Button { volumeOpen.toggle() } label: { Image(systemName: player.volume == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill").font(.system(size: 12)).frame(width: 28, height: 32).contentShape(Rectangle()) }
                     .buttonStyle(.plain).help("Volume").accessibilityLabel("Volume")
                     .popover(isPresented: $volumeOpen) {
@@ -439,34 +450,39 @@ struct TransportView: View {
                     }
                 Spacer(minLength: 0)
             }
-        }.padding(compact ? 8 : 12)
-            .background(.quaternary.opacity(0.3), in: .rect(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(0.35), lineWidth: 0.5))
+        }.padding(compact ? 8 : 14)
+            .geetGlass(in: RoundedRectangle(cornerRadius: 18))
     }
     private func transportButton(_ symbol: String, label: String, active: Bool = false, state: String = "", action: @escaping () -> Void) -> some View {
-        Button(action: action) { Image(systemName: symbol).font(.system(size: 14)).foregroundStyle(active ? sage : Color.primary.opacity(0.7)).frame(width: 28, height: 32).contentShape(Rectangle()) }
+        Button(action: action) { Image(systemName: symbol).font(.system(size: 14)).foregroundStyle(active ? GeetStyle.accent : Color.primary.opacity(0.7)).frame(width: 28, height: 32).contentShape(Rectangle()) }
             .buttonStyle(.plain).help(label).accessibilityLabel(label).accessibilityValue(state)
     }
 }
 
-private struct CollectionPicker: NSViewRepresentable {
+private struct CollectionPicker: View {
     @Binding var selection: Int
-    func makeCoordinator() -> Coordinator { Coordinator(selection: $selection) }
-    func makeNSView(context: Context) -> NSSegmentedControl {
-        let control = NSSegmentedControl(labels: ["Library", "Discover"], trackingMode: .selectOne, target: context.coordinator, action: #selector(Coordinator.changed(_:)))
-        control.segmentStyle = .rounded; control.segmentDistribution = .fillEqually
-        control.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        control.font = .systemFont(ofSize: 13, weight: .medium)
-        control.setAccessibilityLabel("Library and Discover"); control.setAccessibilityIdentifier("collection-tabs")
-        return control
-    }
-    func updateNSView(_ control: NSSegmentedControl, context: Context) {
-        context.coordinator.selection = $selection; control.selectedSegment = selection
-    }
-    final class Coordinator: NSObject {
-        var selection: Binding<Int>
-        init(selection: Binding<Int>) { self.selection = selection }
-        @objc func changed(_ sender: NSSegmentedControl) { selection.wrappedValue = sender.selectedSegment }
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(0..<2) { index in
+                Button {
+                    withAnimation(reduceMotion ? nil : .smooth(duration: 0.2)) { selection = index }
+                } label: {
+                    Group {
+                        if selection == index {
+                            Text(index == 0 ? "Library" : "Discover").frame(maxWidth: .infinity).frame(height: 28)
+                                .geetGlass(in: RoundedRectangle(cornerRadius: 9), interactive: true, tint: GeetStyle.selection.opacity(0.65))
+                        } else {
+                            Text(index == 0 ? "Library" : "Discover").frame(maxWidth: .infinity).frame(height: 28)
+                        }
+                    }.contentShape(Rectangle())
+                }.buttonStyle(.plain).font(.system(size: 13, weight: selection == index ? .medium : .regular))
+                    .foregroundStyle(selection == index ? GeetStyle.ink : GeetStyle.secondary)
+                    .accessibilityAddTraits(selection == index ? .isSelected : [])
+                    .accessibilityIdentifier(index == 0 ? "library-tab" : "discover-tab")
+            }
+        }.padding(2).background(GeetStyle.surface.opacity(0.55), in: .rect(cornerRadius: 11))
+            .accessibilityElement(children: .contain).accessibilityLabel("Library and Discover").accessibilityIdentifier("collection-tabs")
     }
 }
 

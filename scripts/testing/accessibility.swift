@@ -2,7 +2,7 @@ import AppKit
 import ApplicationServices
 import Darwin
 
-// Opt-in developer tool. It only targets a Geet app built in this checkout.
+// Opt-in developer tool. It only targets a geet app built in this checkout.
 let arguments = CommandLine.arguments
 func fail(_ message: String) -> Never { fputs(message + "\n", stderr); exit(1) }
 guard arguments.count >= 3, let pid = Int32(arguments[1]) else { fail("Usage: geet-ax PID snapshot|press|click|right-click|reveal|cancel|set|key [index or identifier] [value or x-fraction] [y-fraction]") }
@@ -12,19 +12,19 @@ let executable = URL(fileURLWithPath: String(cString: path))
 let checkout = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 let bundle = executable.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 guard executable.path.hasPrefix(checkout.appendingPathComponent("build").path + "/"),
-      Bundle(url: bundle)?.bundleIdentifier == "app.geet.mac" else { fail("Refusing a process outside this checkout's Geet builds.") }
+      Bundle(url: bundle)?.bundleIdentifier == "app.geet.mac" else { fail("Refusing a process outside this checkout's geet builds.") }
 guard AXIsProcessTrusted() else { fail("Accessibility access is unavailable for this CLI's responsible application.") }
 if arguments[2] == "capture" {
-    guard kill(pid, SIGUSR1) == 0 else { fail("Could not signal the Geet test process.") }
+    guard kill(pid, SIGUSR1) == 0 else { fail("Could not signal the geet test process.") }
     exit(0)
 }
 if arguments[2] == "activate" {
-    guard NSRunningApplication(processIdentifier: pid)?.activate(options: [.activateAllWindows]) == true else { fail("Could not activate Geet.") }
+    guard NSRunningApplication(processIdentifier: pid)?.activate(options: [.activateAllWindows]) == true else { fail("Could not activate geet.") }
     for _ in 0..<20 {
         if NSRunningApplication(processIdentifier: pid)?.isActive == true { break }
         Thread.sleep(forTimeInterval: 0.05)
     }
-    print("Geet active: \(NSRunningApplication(processIdentifier: pid)?.isActive == true)")
+    print("geet active: \(NSRunningApplication(processIdentifier: pid)?.isActive == true)")
     exit(0)
 }
 let app = AXUIElementCreateApplication(pid)
@@ -41,10 +41,10 @@ func actions(_ element: AXUIElement) -> [String] {
 }
 func postToFocusedGeet(_ event: CGEvent) {
     let system = AXUIElementCreateSystemWide()
-    guard let focused = attribute(system, "AXFocusedUIElement") ?? attribute(system, "AXFocusedApplication"), CFGetTypeID(focused) == AXUIElementGetTypeID() else { fail("No focused Geet control.") }
+    guard let focused = attribute(system, "AXFocusedUIElement") ?? attribute(system, "AXFocusedApplication"), CFGetTypeID(focused) == AXUIElementGetTypeID() else { fail("No focused geet control.") }
     var focusedPID: pid_t = 0
     AXUIElementGetPid(unsafeBitCast(focused, to: AXUIElement.self), &focusedPID)
-    guard focusedPID == pid else { fail("Keyboard input refused because focus is outside Geet.") }
+    guard focusedPID == pid else { fail("Keyboard input refused because focus is outside geet.") }
     event.flags = []
     event.post(tap: .cghidEventTap)
 }
@@ -96,7 +96,7 @@ if arguments[2] == "key" {
     }
     exit(0)
 }
-guard arguments.count >= 4 else { fail("Choose an index or identifier from a fresh Geet snapshot.") }
+guard arguments.count >= 4 else { fail("Choose an index or identifier from a fresh geet snapshot.") }
 func preferredMatch(_ name: String, _ value: String) -> Int? {
     let matches = elements.indices.filter { string(elements[$0], name) == value }
     return matches.first(where: {
@@ -113,7 +113,7 @@ if arguments[3].hasPrefix("title:") {
 } else {
     selected = Int(arguments[3]) ?? elements.firstIndex { string($0, "AXIdentifier") == arguments[3] }
 }
-guard let index = selected, elements.indices.contains(index) else { fail("The Geet control is no longer present.") }
+guard let index = selected, elements.indices.contains(index) else { fail("The geet control is no longer present.") }
 let element = elements[index]
 let result: AXError
 switch arguments[2] {
@@ -223,22 +223,22 @@ case "press": result = AXUIElementPerformAction(element, kAXPressAction as CFStr
 case "reveal": result = AXUIElementPerformAction(element, "AXScrollToVisible" as CFString)
 case "cancel": result = AXUIElementPerformAction(element, kAXCancelAction as CFString)
 case "focus":
-    guard string(element, "AXRole") == "AXTextField" else { fail("Only Geet text fields can be focused.") }
+    guard string(element, "AXRole") == "AXTextField" else { fail("Only geet text fields can be focused.") }
     result = AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
 case "type":
-    guard arguments.count == 5, string(element, "AXRole") == "AXTextField" else { fail("type requires a Geet text field and value.") }
-    guard AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue) == .success else { fail("Could not focus the Geet text field.") }
+    guard arguments.count == 5, string(element, "AXRole") == "AXTextField" else { fail("type requires a geet text field and value.") }
+    guard AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue) == .success else { fail("Could not focus the geet text field.") }
     _ = NSRunningApplication(processIdentifier: pid)?.activate(options: [.activateAllWindows])
     for _ in 0..<20 {
         if NSRunningApplication(processIdentifier: pid)?.isActive == true { break }
         Thread.sleep(forTimeInterval: 0.05)
     }
-    print("Geet active while typing: \(NSRunningApplication(processIdentifier: pid)?.isActive == true)")
+    print("geet active while typing: \(NSRunningApplication(processIdentifier: pid)?.isActive == true)")
     let text = Array(arguments[4].utf16)
     for offset in stride(from: 0, to: text.count, by: 16) {
         let chunk = Array(text[offset..<min(offset + 16, text.count)])
         for down in [true, false] {
-            guard let event = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: down) else { fail("Could not create Geet text event.") }
+            guard let event = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: down) else { fail("Could not create geet text event.") }
             chunk.withUnsafeBufferPointer { event.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: $0.baseAddress) }
             postToFocusedGeet(event)
         }
@@ -246,7 +246,7 @@ case "type":
     }
     exit(0)
 case "set":
-    guard arguments.count == 5, string(element, "AXRole") == "AXTextField" else { fail("set requires a Geet text field and value.") }
+    guard arguments.count == 5, string(element, "AXRole") == "AXTextField" else { fail("set requires a geet text field and value.") }
     result = AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, arguments[4] as CFString)
 default: fail("Unknown action.")
 }

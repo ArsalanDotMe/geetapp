@@ -46,7 +46,7 @@ public actor Resolver {
                           "/opt/homebrew/bin/yt-dlp", "/usr/local/bin/yt-dlp",
                           FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin/yt-dlp").path].compactMap { $0 }
         guard let path = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
-            throw GeetError.message("Geet needs yt-dlp to open YouTube links. Install it with ‘brew install yt-dlp deno’, then choose Recheck in Settings.")
+            throw GeetError.message("geet needs yt-dlp to open YouTube links. Install it with ‘brew install yt-dlp deno’, then choose Recheck in Settings.")
         }
         let runner = runner
         let task = Task { () throws -> URL in

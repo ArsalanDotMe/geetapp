@@ -63,7 +63,7 @@ public struct Collection: Codable, Identifiable, Hashable, Sendable {
     public var resumeIndex: Int
     public var resumePosition: Double
     public var truncated: Bool
-    public var subtitle: String { tracks.count == 1 && tracks[0].isLive ? "\(creator) · Live" : "\(creator) · \(tracks.count) \(tracks.count == 1 ? "mix" : "tracks")" }
+    public var subtitle: String { tracks.count == 1 && tracks[0].isLive ? "\(creator) · Live" : "\(creator) · \(tracks.count) \(tracks.count == 1 ? "track" : "tracks")" }
     public init(id: String, title: String, creator: String, source: URL, thumbnail: URL? = nil, tracks: [Track], keepsOffline: Bool = false) {
         self.id = id; self.title = title; self.creator = creator; self.source = source; self.thumbnail = thumbnail; self.tracks = tracks
         self.addedAt = Date(); self.keepsOffline = keepsOffline; self.resumeIndex = 0; self.resumePosition = 0; self.truncated = false

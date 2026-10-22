@@ -46,10 +46,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         installMenu()
         status = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = status.button {
-            let image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Geet")!
+            let image = Bundle.module.url(forResource: "GeetMenuBar", withExtension: "pdf")
+                .flatMap { NSImage(contentsOf: $0) }
+                ?? NSImage(systemSymbolName: "waveform", accessibilityDescription: "geet")!
+            image.size = NSSize(width: 18, height: 18)
             image.isTemplate = true; button.image = image; button.target = self; button.action = #selector(toggle)
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-            button.toolTip = "Geet"; button.setAccessibilityIdentifier("geet-status-item")
+            button.setAccessibilityLabel("geet")
+            button.toolTip = "geet"; button.setAccessibilityIdentifier("geet-status-item")
         }
         popover.behavior = .transient; popover.animates = true; popover.delegate = self
         #if DEBUG
@@ -189,8 +193,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private func installMenu() {
         let main = NSMenu()
         let application = NSMenuItem(); main.addItem(application)
-        let appMenu = NSMenu(title: "Geet")
-        appMenu.addItem(withTitle: "Quit Geet", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let appMenu = NSMenu(title: "geet")
+        appMenu.addItem(withTitle: "Quit geet", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         application.submenu = appMenu
         let editing = NSMenuItem(); main.addItem(editing)
         let edit = NSMenu(title: "Edit")
@@ -204,12 +208,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private func show(screen: String? = nil, inspectClipboard: Bool = true) {
         guard !popover.isShown, popover.contentViewController == nil else { return }
         guard let button = status.button else { return }
-        let height = min(760, (button.window?.screen?.visibleFrame.height ?? NSScreen.main?.visibleFrame.height ?? 900) - 40)
+        var height = min(760, (button.window?.screen?.visibleFrame.height ?? NSScreen.main?.visibleFrame.height ?? 900) - 40)
+        #if DEBUG
+        if store.preview, let index = CommandLine.arguments.firstIndex(of: "--panel-height"),
+           CommandLine.arguments.indices.contains(index + 1), let requested = Double(CommandLine.arguments[index + 1]),
+           requested.isFinite, (460...760).contains(requested) {
+            height = min(height, requested)
+        }
+        #endif
         let root = PanelView(store: store, player: store.player, height: height, startingScreen: screen)
         let host = NSHostingView(rootView: root)
-        host.frame = NSRect(x: 0, y: 0, width: 450, height: height)
+        host.frame = NSRect(x: 0, y: 0, width: GeetStyle.panelWidth, height: height)
         let glass = NSGlassEffectView(frame: host.frame)
         glass.style = .regular; glass.cornerRadius = 24; glass.contentView = host
+        glass.tintColor = GeetStyle.glassTint.withAlphaComponent(0.22)
         let controller = NSViewController(); controller.view = glass
         popover.contentViewController = controller; popover.contentSize = host.frame.size
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)

@@ -12,7 +12,7 @@ final class AppStore: ObservableObject {
     @Published var downloads: [String: Double] = [:]
     @Published var savedTrackIDs: Set<String> = []
     @Published var storageBytes: Int64 = 0
-    @Published var dependencyText = "Checked when you first open a link"
+    @Published var dependencyText = "Checked when you open a link"
     @Published var clipboardLink: String?
     @Published var offlineEnabled: Bool
     @Published private(set) var discoverFeed: DiscoverFeed
@@ -98,7 +98,7 @@ final class AppStore: ObservableObject {
     func add(_ text: String, playAfter: Bool = false) {
         guard !busy else { return }
         let link: YouTubeLink
-        do { link = try YouTubeLink(text) } catch { message = error.localizedDescription; return }
+        do { link = try YouTubeLink(text) } catch { message = ListenerMessage.forError(error, during: .importLibrary); return }
         let existingID = link.isPlaylist ? "playlist:\(link.id)" : "video:\(link.id)"
         if let existing = library.collections.first(where: { $0.id == existingID }) {
             if playAfter { play(existing) } else { message = "This playlist is already in your library." }; return
@@ -118,7 +118,8 @@ final class AppStore: ObservableObject {
                 await updateDependency()
             } catch {
                 guard importGeneration == token else { return }
-                busy = false; importingCollectionID = nil; if !Task.isCancelled { message = error.localizedDescription }
+                busy = false; importingCollectionID = nil
+                if !Task.isCancelled { message = ListenerMessage.forError(error, during: .importLibrary) }
             }
         }
     }
@@ -141,7 +142,7 @@ final class AppStore: ObservableObject {
                 if fresh.keepsOffline { keepOffline(fresh) }
             } catch {
                 guard importGeneration == token else { return }
-                busy = false; if !Task.isCancelled { message = error.localizedDescription }
+                busy = false; if !Task.isCancelled { message = ListenerMessage.forError(error, during: .importLibrary) }
             }
         }
     }
@@ -155,9 +156,9 @@ final class AppStore: ObservableObject {
         library.collections.removeAll { $0.id == collection.id }; library.collections.insert(collection, at: 0); scheduleSave()
     }
     func keepOffline(_ collection: Collection) {
-        guard offlineEnabled else { message = "Offline listening will be available with a one-time $5 contribution. Checkout is coming soon."; return }
-        guard collection.tracks.contains(where: { !$0.isLive }) else { message = "Live radio is available online only."; return }
-        if downloadTask != nil { message = "A playlist is already being saved. Let it finish, or cancel it first."; return }
+        guard offlineEnabled else { message = "Offline listening is coming soon. Streaming is free."; return }
+        guard collection.tracks.contains(where: { !$0.isLive }) else { message = "Live radio needs an internet connection."; return }
+        if downloadTask != nil { message = "Another playlist is being saved. Wait for it to finish or cancel the download."; return }
         guard let row = library.collections.firstIndex(where: { $0.id == collection.id }) else { return }
         library.collections[row].keepsOffline = true; scheduleSave()
         downloadCollectionID = collection.id
@@ -183,7 +184,7 @@ final class AppStore: ObservableObject {
                     }
                     await updateStorage()
                 }
-            } catch { if !Task.isCancelled { message = error.localizedDescription } }
+            } catch { if !Task.isCancelled { message = ListenerMessage.forError(error, during: .download) } }
             // A cancelled download must not repin music removed from the library.
             let pins = Set(library.collections.filter(\.keepsOffline).flatMap(\.tracks).map(\.id))
             await cache.setPinned(trackIDs: pins)
@@ -292,15 +293,15 @@ final class AppStore: ObservableObject {
         player.panelVisible(false); clipboardTask?.cancel(); artwork.cancelAll(); flushSave()
     }
     func recheck() {
-        dependencyText = "Checking…"
+        dependencyText = "Checking playback…"
         Task {
-            do { let probe = try await resolver.recheck(); dependencyText = "yt-dlp \(probe.version)" }
-            catch { dependencyText = error.localizedDescription }
+            do { _ = try await resolver.recheck(); dependencyText = "Ready to play" }
+            catch { dependencyText = ListenerMessage.forError(error, during: .dependency) }
         }
     }
     func setLogin(_ enabled: Bool) {
         do { if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() } }
-        catch { message = error.localizedDescription }
+        catch { message = ListenerMessage.forError(error, during: .loginSetting) }
     }
     func shutdown() { cancelDiscoverPreview(); discoverTask?.cancel(); player.shutdown(); importTask?.cancel(); downloadTask?.cancel(); clipboardTask?.cancel(); flushSave() }
     private func updateStorage() async {
@@ -309,7 +310,7 @@ final class AppStore: ObservableObject {
         storageBytes = entries.reduce(0) { $0 + $1.storedBytes }
     }
     private func updateDependency() async {
-        if let probe = await resolver.dependencyStatus() { dependencyText = "yt-dlp \(probe.version)" }
+        if await resolver.dependencyStatus() != nil { dependencyText = "Ready to play" }
     }
     private func saveConfiguration() {
         library.shuffle = player.shuffle; library.repeatMode = player.repeatMode; library.volume = player.volume; scheduleSave()
@@ -324,7 +325,7 @@ final class AppStore: ObservableObject {
         saveWork?.cancel(); saveWork = nil; guard !preview else { return }
         library.volume = player.volume
         do { try Paths.write(library, to: root.appendingPathComponent("library.json")) }
-        catch { message = "Your library couldn’t be saved. \(error.localizedDescription)" }
+        catch { message = ListenerMessage.forError(error, during: .saveLibrary) }
     }
 }
 

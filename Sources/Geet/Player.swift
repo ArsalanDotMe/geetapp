@@ -221,7 +221,7 @@ final class Player: ObservableObject {
                 publishNowPlaying(); prefetchNext()
             } catch {
                 guard generation == token, !Task.isCancelled else { return }
-                self.error = error.localizedDescription; isLoading = false; isPlaying = false; recovering = false
+                self.error = ListenerMessage.forError(error, during: .playback); isLoading = false; isPlaying = false; recovering = false
                 tearDownPipeline(); publishNowPlaying()
             }
         }
@@ -261,7 +261,7 @@ final class Player: ObservableObject {
     }
     private func recover(_ message: String) {
         guard !recovering, isPlaying, let track else { return }
-        guard recovery.permit(track.id) else { pause(); enterDeepIdle(); error = "Playback stopped after two recovery attempts. \(message)"; return }
+        guard recovery.permit(track.id) else { pause(); enterDeepIdle(); error = "Playback stopped. Try playing this track again."; return }
         recovering = true; snapshot(); load(track, at: position, recoveryAttempt: true)
     }
     private func prefetchNext() {
