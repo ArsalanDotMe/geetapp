@@ -143,17 +143,16 @@ struct PanelView: View {
     @ViewBuilder private var libraryView: some View {
         if filtered.isEmpty {
             VStack(spacing: 18) {
-                CoverArt(url: nil, store: store.artwork).frame(height: 190).clipShape(.rect(cornerRadius: 13))
-                Text(search.isEmpty ? "Make yourself a little music library." : "No playlists found.")
+                Text(search.isEmpty ? "Your library is empty." : "No playlists found.")
                     .font(.system(size: 21, weight: .semibold, design: .rounded)).multilineTextAlignment(.center).padding(.horizontal, 18)
-                Text(search.isEmpty ? "Bring a YouTube playlist or a favourite long mix. Your next good listening session starts here." : "Try a different name or creator.")
+                Text(search.isEmpty ? "Add your favourites or head over to Discover to start listening." : "Try a different name or creator.")
                     .font(.system(size: 13)).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.horizontal, 26)
                 if search.isEmpty {
                     Button { adding = true; linkFocused = true } label: { Label("Add a playlist", systemImage: "plus") }
                         .buttonStyle(.glassProminent).controlSize(.large)
                     Button("Find something in Discover") { tab = 1 }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(.secondary)
                 }
-            }.padding(.bottom, 18)
+            }.padding(.top, 40).padding(.bottom, 18)
         } else {
             LazyVStack(spacing: 7) {
                 ForEach(Array(filtered.enumerated()), id: \.element.id) { index, collection in
