@@ -59,7 +59,13 @@ struct PanelView: View {
             }
             if player.track != nil || store.preview {
                 TransportView(player: player, clock: player.clock, artwork: store.artwork, preview: store.preview, acceptsSpace: !adding && !searching,
-                              showQueue: { settings = false; support = false; detail = player.collectionID ?? store.library.collections.first?.id })
+                              showQueue: {
+                                  let queueID = player.collectionID ?? store.library.collections.first?.id
+                                  let isShowingQueue = !settings && !support && detail != nil && detail == queueID
+                                  settings = false
+                                  support = false
+                                  detail = isShowingQueue ? nil : queueID
+                              })
             } else if !settings && !support && detail == nil {
                     HStack(spacing: 7) { Image(systemName: "waveform"); Text("A little room for your music.") }
                         .font(.system(size: 12)).foregroundStyle(.secondary).frame(height: 30)
