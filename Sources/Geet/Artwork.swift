@@ -90,6 +90,8 @@ struct CoverArt: View {
             if let url { let loaded = await store.image(url); if !Task.isCancelled { image = loaded } }
         }
         .onDisappear { image = nil }
+        // Scaled artwork can extend beyond its visible, clipped card bounds.
+        .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 }

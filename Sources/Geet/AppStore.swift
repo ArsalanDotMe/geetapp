@@ -7,6 +7,7 @@ import GeetCore
 final class AppStore: ObservableObject {
     @Published var library: LibraryDocument
     @Published var busy = false
+    @Published private(set) var importingCollectionID: String?
     @Published var message: String?
     @Published var downloads: [String: Double] = [:]
     @Published var savedTrackIDs: Set<String> = []
@@ -28,10 +29,10 @@ final class AppStore: ObservableObject {
     private var clipboardChange = -1
     private var saveWork: DispatchWorkItem?
     static let discover: [DiscoverPick] = [
-        DiscoverPick(id: "lofi", title: "Lofi hip hop radio", creator: "Lofi Girl", mood: "A familiar place to focus", videoID: "0sfDth4lMLc"),
-        DiscoverPick(id: "classroom", title: "Chillhop in the Classroom", creator: "Chillhop Music", mood: "Music to get things done", videoID: "mypnwpywaaw", playlistID: "PLt7bG0K25iXhu8bSbLsoWFBf-xSyLwy2_"),
-        DiscoverPick(id: "fall", title: "Chillhop Essentials Fall", creator: "Chillhop Music", mood: "Settle into the season", videoID: "jiua2V9q9V0", playlistID: "PLt7bG0K25iXjIl0bopl1TY8_6n35gsgcd"),
-        DiscoverPick(id: "winter", title: "Chillhop Essentials Winter", creator: "Chillhop Music", mood: "A slower kind of afternoon", videoID: "Zq0cZnA2Dhc", playlistID: "PLt7bG0K25iXh5RbylpYcJwsHBpM0dGc2i")
+        DiscoverPick(id: "lofi", title: "Lofi hip hop radio", creator: "Lofi Girl", mood: "A familiar place to focus", kind: .radio, videoID: "0sfDth4lMLc"),
+        DiscoverPick(id: "classroom", title: "Chillhop in the Classroom", creator: "Chillhop Music", mood: "Music to get things done", kind: .playlist, videoID: "mypnwpywaaw", playlistID: "PLt7bG0K25iXhu8bSbLsoWFBf-xSyLwy2_"),
+        DiscoverPick(id: "fall", title: "Chillhop Essentials Fall", creator: "Chillhop Music", mood: "Settle into the season", kind: .playlist, videoID: "jiua2V9q9V0", playlistID: "PLt7bG0K25iXjIl0bopl1TY8_6n35gsgcd"),
+        DiscoverPick(id: "winter", title: "Chillhop Essentials Winter", creator: "Chillhop Music", mood: "A slower kind of afternoon", kind: .playlist, videoID: "Zq0cZnA2Dhc", playlistID: "PLt7bG0K25iXh5RbylpYcJwsHBpM0dGc2i")
     ]
     init(preview: Bool = false, root overrideRoot: URL? = nil) {
         self.preview = preview
@@ -85,7 +86,7 @@ final class AppStore: ObservableObject {
         if let existing = library.collections.first(where: { $0.id == existingID }) {
             if playAfter { play(existing) } else { message = "This playlist is already in your library." }; return
         }
-        busy = true; message = nil
+        busy = true; importingCollectionID = existingID; message = nil
         let token = UUID(); importGeneration = token
         clipboardTask?.cancel()
         importTask = Task {
@@ -94,13 +95,13 @@ final class AppStore: ObservableObject {
                 let collection = try await resolver.importCollection(link)
                 try Task.checkCancellation()
                 guard importGeneration == token else { return }
-                library.collections.append(collection); scheduleSave(); busy = false
+                library.collections.append(collection); scheduleSave(); busy = false; importingCollectionID = nil
                 if playAfter { play(collection) }
                 clipboardLink = nil
                 await updateDependency()
             } catch {
                 guard importGeneration == token else { return }
-                busy = false; if !Task.isCancelled { message = error.localizedDescription }
+                busy = false; importingCollectionID = nil; if !Task.isCancelled { message = error.localizedDescription }
             }
         }
     }
@@ -173,7 +174,7 @@ final class AppStore: ObservableObject {
         }
     }
     func cancelDownload() { downloadTask?.cancel() }
-    func cancelImport() { importGeneration = UUID(); importTask?.cancel(); importTask = nil; busy = false }
+    func cancelImport() { importGeneration = UUID(); importTask?.cancel(); importTask = nil; busy = false; importingCollectionID = nil }
     func removeOffline(_ collection: Collection) {
         if downloadCollectionID == collection.id { cancelDownload() }
         if let row = library.collections.firstIndex(where: { $0.id == collection.id }) { library.collections[row].keepsOffline = false }

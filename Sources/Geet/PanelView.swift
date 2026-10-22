@@ -40,19 +40,21 @@ struct PanelView: View {
                 }
                 .scrollIndicators(.hidden)
                 .frame(maxHeight: .infinity)
-                if store.busy {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small); Text("Opening your link…").font(.system(size: 12)); Spacer()
-                        Button("Cancel", action: store.cancelImport).buttonStyle(.plain).font(.system(size: 12))
-                    }
-                }
                 if let copied = store.clipboardLink, !store.busy {
                     HStack {
                         Button { store.add(copied) } label: { Label("Add copied link", systemImage: "link") }
                             .buttonStyle(.plain).font(.system(size: 12, weight: .medium))
                         Spacer()
-                        Button { store.clipboardLink = nil } label: { Image(systemName: "xmark").font(.system(size: 10)).frame(width: 28, height: 28) }.buttonStyle(.plain).accessibilityLabel("Dismiss copied link")
+                        Button { store.clipboardLink = nil } label: { Image(systemName: "xmark").font(.system(size: 10)).frame(width: 28, height: 28).contentShape(Rectangle()) }.buttonStyle(.plain).accessibilityLabel("Dismiss copied link").accessibilityIdentifier("dismiss-copied-link")
                     }.padding(10).background(.quaternary, in: .rect(cornerRadius: 10))
+                }
+            }
+            if store.busy {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(store.importingCollectionID == nil ? "Refreshing playlist…" : "Adding to your library…").font(.system(size: 12))
+                    Spacer()
+                    Button("Cancel", action: store.cancelImport).buttonStyle(.plain).font(.system(size: 12)).accessibilityIdentifier("cancel-import")
                 }
             }
             if player.track != nil || store.preview {
@@ -156,7 +158,7 @@ struct PanelView: View {
     private func hero(_ collection: Collection) -> some View {
         ZStack(alignment: .bottom) {
             CoverArt(url: collection.thumbnail, store: store.artwork, seed: collection.id).frame(height: 190).clipped()
-            LinearGradient(colors: [.clear, .black.opacity(0.12), .black.opacity(0.85)], startPoint: .center, endPoint: .bottom)
+            LinearGradient(colors: [.clear, .black.opacity(0.12), .black.opacity(0.85)], startPoint: .center, endPoint: .bottom).allowsHitTesting(false)
             HStack(alignment: .bottom, spacing: 10) {
                 Button { detail = collection.id } label: {
                     VStack(alignment: .leading, spacing: 5) {
@@ -172,7 +174,7 @@ struct PanelView: View {
                                 .accessibilityLabel("Saving playlist offline")
                         }
                     }.foregroundStyle(.white).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-                }.buttonStyle(.plain).help("View tracks")
+                }.buttonStyle(.plain).help("View tracks").accessibilityIdentifier("library-open-\(collection.id)")
                 HStack(spacing: 10) {
                     playButton(collection, prominent: true)
                     collectionMenu(collection, light: true)
@@ -180,6 +182,7 @@ struct PanelView: View {
             }.padding(14)
         }
         .frame(height: 190).clipShape(.rect(cornerRadius: 13))
+        .contentShape(Rectangle())
         .accessibilityElement(children: .contain)
         .accessibilityLabel(collection.title)
     }
@@ -189,7 +192,7 @@ struct PanelView: View {
         return ZStack {
             CoverArt(url: collection.thumbnail, store: store.artwork, seed: collection.id)
             LinearGradient(stops: [.init(color: base, location: 0), .init(color: base.opacity(0.99), location: 0.27),
-                                   .init(color: base.opacity(0.86), location: 0.5), .init(color: base.opacity(0.08), location: 1)], startPoint: .leading, endPoint: .trailing)
+                                   .init(color: base.opacity(0.86), location: 0.5), .init(color: base.opacity(0.08), location: 1)], startPoint: .leading, endPoint: .trailing).allowsHitTesting(false)
             HStack(spacing: 10) {
                 Button { detail = collection.id } label: {
                     VStack(alignment: .leading, spacing: 4) {
@@ -202,7 +205,7 @@ struct PanelView: View {
                         }.font(.system(size: 11)).foregroundStyle(.secondary)
                         if let progress = store.downloads[collection.id] { ProgressView(value: progress).frame(width: 140).tint(sage) }
                     }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-                }.buttonStyle(.plain).help("View tracks")
+                }.buttonStyle(.plain).help("View tracks").accessibilityIdentifier("library-open-\(collection.id)")
                 playButton(collection)
                 Button { detail = collection.id } label: {
                     Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(.primary).frame(width: 28, height: 32).contentShape(Rectangle())
@@ -210,6 +213,7 @@ struct PanelView: View {
             }.padding(.horizontal, 13)
         }
         .frame(height: 66).clipShape(.rect(cornerRadius: 11))
+        .contentShape(Rectangle())
         .contextMenu { collectionMenuItems(collection) }
     }
     private func playButton(_ collection: Collection, prominent: Bool = false) -> some View {
@@ -223,12 +227,13 @@ struct PanelView: View {
                 .background(.white.opacity(prominent ? 0.94 : 0.89), in: Circle())
         }.buttonStyle(PressScale()).help(active ? "Pause \(collection.title)" : "Play \(collection.title)")
             .accessibilityLabel(active ? "Pause \(collection.title)" : "Play \(collection.title)")
+            .accessibilityIdentifier("library-play-\(collection.id)")
     }
     private func collectionMenu(_ collection: Collection, light: Bool = false) -> some View {
         Menu { collectionMenuItems(collection) } label: {
             Image(systemName: "ellipsis").font(.system(size: 15)).foregroundStyle(light ? .white : .primary)
-                .frame(width: 30, height: 34).background(.white.opacity(light ? 0.16 : 0), in: Circle())
-        }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(light ? .white : .primary).fixedSize().help("Playlist options").accessibilityLabel("Options for \(collection.title)")
+                .frame(width: 30, height: 34).background(.white.opacity(light ? 0.16 : 0), in: Circle()).contentShape(Circle())
+        }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(light ? .white : .primary).fixedSize().help("Playlist options").accessibilityLabel("Options for \(collection.title)").accessibilityIdentifier("collection-options-\(collection.id)")
     }
     @ViewBuilder private func collectionMenuItems(_ collection: Collection) -> some View {
         Button("Play from beginning") { store.play(collection, beginning: true) }
@@ -254,13 +259,18 @@ struct PanelView: View {
             Text("A few places to find your focus.").font(.system(size: 13)).foregroundStyle(.secondary)
             ForEach(AppStore.discover.filter { search.isEmpty || $0.title.localizedCaseInsensitiveContains(search) || $0.creator.localizedCaseInsensitiveContains(search) }) { pick in
                 let saved = store.savedCollection(for: pick)
+                let importing = store.importingCollectionID == (pick.playlistID.map { "playlist:\($0)" } ?? "video:\(pick.videoID)")
                 let active = saved?.id == player.collectionID && (player.isPlaying || player.isLoading)
                 VStack(alignment: .leading, spacing: 0) {
                     CoverArt(url: pick.thumbnail, store: store.artwork).frame(height: 145).clipped()
                     HStack {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(pick.title).font(.system(size: 14, weight: .semibold))
-                            Text(pick.creator).font(.system(size: 12)).foregroundStyle(.secondary)
+                            HStack(spacing: 6) {
+                                Text(pick.creator).lineLimit(1)
+                                Text("·").accessibilityHidden(true)
+                                discoverKindLabel(pick.kind).fixedSize()
+                            }.font(.system(size: 12)).foregroundStyle(.secondary).allowsHitTesting(false)
                         }
                         Spacer()
                         Button { store.playDiscover(pick) } label: {
@@ -268,17 +278,21 @@ struct PanelView: View {
                                 if saved?.id == player.collectionID && player.isLoading { ProgressView().controlSize(.small) }
                                 else { Image(systemName: active ? "pause.fill" : "play.fill").font(.system(size: 14, weight: .semibold)) }
                             }
-                            .foregroundStyle(Color.black.opacity(0.85)).frame(width: 36, height: 36)
-                                .background(.white.opacity(0.94), in: Circle())
+                            .foregroundStyle(Color(red: 0.137, green: 0.196, blue: 0.275)).frame(width: 36, height: 36)
+                                .background(.white, in: Circle()).contentShape(Circle())
                         }.buttonStyle(PressScale()).disabled(store.busy && saved == nil)
                             .help(active ? "Pause \(pick.title)" : "Play \(pick.title)")
                             .accessibilityLabel(active ? "Pause \(pick.title)" : "Play \(pick.title)")
+                            .accessibilityIdentifier("discover-play-\(pick.id)")
                         if saved != nil {
-                            Image(systemName: "checkmark").foregroundStyle(sage).frame(width: 28, height: 32)
-                                .help("In your library").accessibilityLabel("In your library")
+                            Image(systemName: "checkmark").foregroundStyle(sage).frame(width: 36, height: 36)
+                                .help("In your library").accessibilityLabel("In your library").accessibilityIdentifier("discover-saved-\(pick.id)")
+                        } else if importing {
+                            ProgressView().controlSize(.small).frame(width: 36, height: 36)
+                                .accessibilityLabel("Adding \(pick.title) to library").accessibilityIdentifier("discover-adding-\(pick.id)")
                         } else {
-                            Button { store.add(pick.url.absoluteString) } label: { Image(systemName: "plus").frame(width: 28, height: 32) }
-                                .buttonStyle(.plain).disabled(store.busy).help("Add to library").accessibilityLabel("Add \(pick.title) to library")
+                            Button { store.add(pick.url.absoluteString) } label: { Image(systemName: "plus").frame(width: 36, height: 36).contentShape(Rectangle()) }
+                                .buttonStyle(.plain).disabled(store.busy).help("Add to library").accessibilityLabel("Add \(pick.title) to library").accessibilityIdentifier("discover-add-\(pick.id)")
                         }
                     }.padding(12)
                 }.background(.quaternary.opacity(0.35), in: .rect(cornerRadius: 12)).clipShape(.rect(cornerRadius: 12))
@@ -286,8 +300,18 @@ struct PanelView: View {
             if !search.isEmpty && !AppStore.discover.contains(where: { $0.title.localizedCaseInsensitiveContains(search) || $0.creator.localizedCaseInsensitiveContains(search) }) {
                 Text("No playlists found. Try a different name or creator.").font(.system(size: 13)).foregroundStyle(.secondary)
             }
-            Text("Selections are curated, not a live popularity chart.").font(.system(size: 11)).foregroundStyle(.tertiary).padding(.bottom, 8)
         }
+    }
+    private func discoverKindLabel(_ kind: DiscoverPick.Kind) -> some View {
+        let symbol: String
+        switch kind {
+        case .radio: symbol = "dot.radiowaves.left.and.right"
+        case .playlist: symbol = "music.note.list"
+        case .mix: symbol = "waveform"
+        }
+        return Label(kind.rawValue, systemImage: symbol)
+            .labelStyle(.titleAndIcon)
+            .accessibilityLabel(kind.rawValue)
     }
     private func detailView(_ collection: Collection) -> some View {
         VStack(spacing: 12) {
@@ -374,7 +398,7 @@ struct PanelView: View {
         ZStack {
             Color.black.opacity(0.16).onTapGesture { adding = false }
             VStack(alignment: .leading, spacing: 17) {
-                HStack { Text("Bring your music.").font(.system(size: 22, weight: .semibold, design: .rounded)); Spacer(); Button { adding = false } label: { Image(systemName: "xmark") }.buttonStyle(.plain).accessibilityLabel("Close") }
+                HStack { Text("Bring your music.").font(.system(size: 22, weight: .semibold, design: .rounded)); Spacer(); Button { adding = false } label: { Image(systemName: "xmark").frame(width: 28, height: 28).contentShape(Rectangle()) }.buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("close-add") }
                 Text("Paste a YouTube playlist, a long mix, or a live radio link.").font(.system(size: 13)).foregroundStyle(.secondary)
                 TextField("https://youtube.com/playlist?list=…", text: $link).textFieldStyle(.roundedBorder).focused($linkFocused)
                     .onSubmit { submitLink() }.accessibilityIdentifier("youtube-link")
@@ -396,7 +420,8 @@ struct PanelView: View {
 private struct PressScale: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.scaleEffect(configuration.isPressed && !reduceMotion ? 0.94 : 1)
+        // Glass draws the circle but does not make its transparent padding clickable.
+        configuration.label.contentShape(Circle()).scaleEffect(configuration.isPressed && !reduceMotion ? 0.94 : 1)
             .opacity(configuration.isPressed ? 0.85 : 1).animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
@@ -423,7 +448,7 @@ struct TransportView: View {
                     Text(preview ? "Late Night Coding" : player.collectionTitle).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 6)
-                Button(action: showQueue) { Image(systemName: "list.bullet").font(.system(size: 15)).frame(width: 28, height: 28).contentShape(Rectangle()) }.buttonStyle(.plain).help("View playlist tracks").accessibilityLabel("View playlist tracks")
+                Button(action: showQueue) { Image(systemName: "list.bullet").font(.system(size: 15)).frame(width: 28, height: 28).contentShape(Rectangle()) }.buttonStyle(.plain).help("View playlist tracks").accessibilityLabel("View playlist tracks").accessibilityIdentifier("show-queue")
             }
             if player.track?.isLive == true {
                 HStack(spacing: 5) { Circle().fill(sage).frame(width: 5, height: 5); Text("Live radio").font(.system(size: 10)); Spacer() }.padding(.vertical, 3)
@@ -446,13 +471,14 @@ struct TransportView: View {
                         .foregroundStyle(colorScheme == .dark ? Color.black.opacity(0.85) : .white).frame(width: 43, height: 43).background(sage, in: Circle())
                 }.buttonStyle(PressScale()).help(player.isLoading ? "Cancel playback" : player.isPlaying ? "Pause" : "Play").accessibilityLabel(player.isLoading ? "Cancel playback" : player.isPlaying ? "Pause" : "Play")
                     .keyboardShortcut(acceptsSpace ? KeyboardShortcut(.space, modifiers: []) : nil)
+                    .accessibilityIdentifier("transport-play")
                 transportButton("forward.end.fill", label: "Next", action: { player.next() })
                 transportButton(player.repeatMode == .one ? "repeat.1" : "repeat", label: "Repeat: \(player.repeatMode.rawValue)", active: player.repeatMode != .off, action: player.cycleRepeat)
                 Button { volumeOpen.toggle() } label: { Image(systemName: player.volume == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill").font(.system(size: 12)).frame(width: 28, height: 32).contentShape(Rectangle()) }
                     .buttonStyle(.plain).help("Volume").accessibilityLabel("Volume")
                     .popover(isPresented: $volumeOpen) {
                         HStack {
-                            Button { player.volume = player.volume == 0 ? 0.8 : 0 } label: { Image(systemName: player.volume == 0 ? "speaker.slash" : "speaker.wave.2") }.buttonStyle(.plain).help("Mute or unmute").accessibilityLabel("Mute or unmute")
+                            Button { player.volume = player.volume == 0 ? 0.8 : 0 } label: { Image(systemName: player.volume == 0 ? "speaker.slash" : "speaker.wave.2").frame(width: 28, height: 28).contentShape(Rectangle()) }.buttonStyle(.plain).help("Mute or unmute").accessibilityLabel("Mute or unmute").accessibilityIdentifier("mute")
                             Slider(value: Binding(get: { Double(player.volume) }, set: { player.volume = Float($0) }), in: 0...1).accessibilityLabel("Volume level")
                         }.padding(14).frame(width: 190)
                     }

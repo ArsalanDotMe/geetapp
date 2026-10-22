@@ -5,7 +5,7 @@ import Darwin
 // Opt-in developer tool. It only targets a Geet app built in this checkout.
 let arguments = CommandLine.arguments
 func fail(_ message: String) -> Never { fputs(message + "\n", stderr); exit(1) }
-guard arguments.count >= 3, let pid = Int32(arguments[1]) else { fail("Usage: geet-ax PID snapshot|press|set|key [index] [value]") }
+guard arguments.count >= 3, let pid = Int32(arguments[1]) else { fail("Usage: geet-ax PID snapshot|press|click|right-click|reveal|cancel|set|key [index or identifier] [value or x-fraction] [y-fraction]") }
 var path = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
 guard proc_pidpath(pid, &path, UInt32(path.count)) > 0 else { fail("The target process is not running.") }
 let executable = URL(fileURLWithPath: String(cString: path))
@@ -97,12 +97,80 @@ if arguments[2] == "key" {
     exit(0)
 }
 guard arguments.count >= 4 else { fail("Choose an index or identifier from a fresh Geet snapshot.") }
-let selected = Int(arguments[3]) ?? elements.firstIndex { string($0, "AXIdentifier") == arguments[3] }
+func preferredMatch(_ name: String, _ value: String) -> Int? {
+    let matches = elements.indices.filter { string(elements[$0], name) == value }
+    return matches.first(where: {
+        guard let dimensions = attribute(elements[$0], "AXSize"), CFGetTypeID(dimensions) == AXValueGetTypeID() else { return false }
+        var size = CGSize.zero
+        return AXValueGetValue(dimensions as! AXValue, .cgSize, &size) && size.width > 0 && size.height > 0
+    }) ?? matches.first
+}
+let selected: Int?
+if arguments[3].hasPrefix("title:") {
+    selected = preferredMatch("AXTitle", String(arguments[3].dropFirst(6)))
+} else if arguments[3].hasPrefix("label:") {
+    selected = preferredMatch("AXDescription", String(arguments[3].dropFirst(6)))
+} else {
+    selected = Int(arguments[3]) ?? elements.firstIndex { string($0, "AXIdentifier") == arguments[3] }
+}
 guard let index = selected, elements.indices.contains(index) else { fail("The Geet control is no longer present.") }
 let element = elements[index]
 let result: AXError
 switch arguments[2] {
+case "click", "right-click":
+    guard arguments.count == 4 || arguments.count == 6,
+          let position = attribute(element, "AXPosition"), CFGetTypeID(position) == AXValueGetTypeID(),
+          let dimensions = attribute(element, "AXSize"), CFGetTypeID(dimensions) == AXValueGetTypeID(),
+          CGPreflightPostEventAccess() else { fail("click requires a visible geet control and input access.") }
+    var origin = CGPoint.zero, size = CGSize.zero
+    guard AXValueGetValue(position as! AXValue, .cgPoint, &origin),
+          AXValueGetValue(dimensions as! AXValue, .cgSize, &size), size.width > 0, size.height > 0,
+          let fractionX = arguments.count == 6 ? Double(arguments[4]) : 0.5,
+          let fractionY = arguments.count == 6 ? Double(arguments[5]) : 0.5,
+          (0...1).contains(fractionX), (0...1).contains(fractionY) else { fail("Choose fractions between 0 and 1 inside the control.") }
+    let point = CGPoint(x: origin.x + size.width * fractionX, y: origin.y + size.height * fractionY)
+    let rightClick = arguments[2] == "right-click"
+    let events: [CGEventType] = rightClick ? [.mouseMoved, .rightMouseDown, .rightMouseUp] : [.mouseMoved, .leftMouseDown, .leftMouseUp]
+    var mouseDownSent = false
+    func pointerFailure(_ message: String) -> Never {
+        if mouseDownSent {
+            let release = CGEvent(mouseEventSource: nil, mouseType: rightClick ? .rightMouseUp : .leftMouseUp,
+                                  mouseCursorPosition: point, mouseButton: rightClick ? .right : .left)
+            release?.flags = []
+            release?.postToPid(pid)
+        }
+        fail(message)
+    }
+    for kind in events {
+        var hit: AXUIElement?
+        guard AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(), Float(point.x), Float(point.y), &hit) == .success,
+              let hit else { pointerFailure("Could not verify the geet control under the pointer.") }
+        var hitPID: pid_t = 0
+        AXUIElementGetPid(hit, &hitPID)
+        guard hitPID == pid else { pointerFailure("Mouse input refused because another application covers the control.") }
+        var ancestor: AXUIElement? = hit
+        var hitsControl = false
+        for _ in 0..<25 {
+            guard let candidate = ancestor else { break }
+            if CFEqual(candidate, element) { hitsControl = true; break }
+            guard let parent = attribute(candidate, "AXParent"), CFGetTypeID(parent) == AXUIElementGetTypeID() else { break }
+            ancestor = unsafeBitCast(parent, to: AXUIElement.self)
+        }
+        let releasing = kind == .leftMouseUp || kind == .rightMouseUp
+        // Native menus can replace their button's hit target on mouse-down.
+        guard hitsControl || releasing else { pointerFailure("Mouse input refused because the target is clipped, covered, or offscreen. Reveal it and take a fresh snapshot.") }
+        guard let event = CGEvent(mouseEventSource: nil, mouseType: kind, mouseCursorPosition: point, mouseButton: rightClick ? .right : .left) else { pointerFailure("Could not create a mouse event.") }
+        event.flags = []
+        event.setIntegerValueField(.mouseEventClickState, value: 1)
+        event.post(tap: .cghidEventTap)
+        mouseDownSent = kind == .leftMouseDown || kind == .rightMouseDown
+        Thread.sleep(forTimeInterval: 0.12)
+    }
+    print("Clicked at \(point.x), \(point.y) inside \(size.width) × \(size.height)")
+    result = .success
 case "press": result = AXUIElementPerformAction(element, kAXPressAction as CFString)
+case "reveal": result = AXUIElementPerformAction(element, "AXScrollToVisible" as CFString)
+case "cancel": result = AXUIElementPerformAction(element, kAXCancelAction as CFString)
 case "focus":
     guard string(element, "AXRole") == "AXTextField" else { fail("Only Geet text fields can be focused.") }
     result = AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)

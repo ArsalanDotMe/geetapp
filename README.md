@@ -4,7 +4,7 @@ A native macOS 26 menu bar player for collecting YouTube playlists, long mixes, 
 
 ## Run
 
-The local development app is `build/Geet.app`. Open it, then click the waveform in your menu bar. Use **+** to add a public or unlisted YouTube playlist or video. Play resumes each collection’s saved track and position. The arrow beside a playlist opens its individual tracks.
+The local development app is `build/Geet.app`. Open it, then click the waveform in your menu bar. Use **+** to add a public or unlisted YouTube playlist or video. Play resumes each collection’s saved track and position. The arrow beside a playlist opens its individual tracks. Right-click the menu bar icon and choose **Quit geet** to close the app.
 
 The first launch opens no windows, performs no network requests, creates no player, and starts no helper processes. yt-dlp is checked lazily on the first operation that needs it. Login launch behaves the same way.
 

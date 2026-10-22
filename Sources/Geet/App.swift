@@ -38,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         if let button = status.button {
             let image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Geet")!
             image.isTemplate = true; button.image = image; button.target = self; button.action = #selector(toggle)
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
             button.toolTip = "Geet"; button.setAccessibilityIdentifier("geet-status-item")
         }
         popover.behavior = .transient; popover.animates = true; popover.delegate = self
@@ -143,7 +144,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         #endif
     }
-    @objc private func toggle() { if popover.isShown { popover.performClose(nil) } else { show() } }
+    @objc private func toggle() {
+        if let event = NSApp.currentEvent,
+           event.type == .rightMouseUp || event.modifierFlags.contains(.control),
+           let button = status.button {
+            if popover.isShown { popover.performClose(nil) }
+            let menu = NSMenu()
+            let quit = NSMenuItem(title: "Quit geet", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+            quit.target = NSApp
+            menu.addItem(quit)
+            status.menu = menu
+            button.performClick(nil)
+            status.menu = nil
+        } else if popover.isShown {
+            popover.performClose(nil)
+        } else {
+            show()
+        }
+    }
     private func installMenu() {
         let main = NSMenu()
         let application = NSMenuItem(); main.addItem(application)
