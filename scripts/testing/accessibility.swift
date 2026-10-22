@@ -117,6 +117,57 @@ guard let index = selected, elements.indices.contains(index) else { fail("The Ge
 let element = elements[index]
 let result: AXError
 switch arguments[2] {
+case "drag":
+    guard arguments.count == 6, let dx = Double(arguments[4]), let dy = Double(arguments[5]),
+          dx.isFinite, dy.isFinite, abs(dx) <= 400, abs(dy) <= 400,
+          let position = attribute(element, "AXPosition"), CFGetTypeID(position) == AXValueGetTypeID(),
+          let dimensions = attribute(element, "AXSize"), CFGetTypeID(dimensions) == AXValueGetTypeID(),
+          CGPreflightPostEventAccess() else { fail("drag requires a visible geet control and bounded x/y distances.") }
+    var origin = CGPoint.zero, size = CGSize.zero
+    guard AXValueGetValue(position as! AXValue, .cgPoint, &origin),
+          AXValueGetValue(dimensions as! AXValue, .cgSize, &size), size.width > 0, size.height > 0 else { fail("Invalid drag target bounds.") }
+    let start = CGPoint(x: origin.x + size.width / 2, y: origin.y + size.height / 2)
+    var current = start, down = false
+    func dragFailure(_ message: String) -> Never {
+        if down {
+            let release = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: current, mouseButton: .left)
+            release?.flags = []; release?.postToPid(pid)
+        }
+        fail(message)
+    }
+    func send(_ kind: CGEventType, _ point: CGPoint, requireTarget: Bool = false) {
+        var hit: AXUIElement?
+        guard AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(), Float(point.x), Float(point.y), &hit) == .success,
+              let hit else { dragFailure("Could not verify the drag's target application.") }
+        var hitPID: pid_t = 0; AXUIElementGetPid(hit, &hitPID)
+        guard hitPID == pid else { dragFailure("Drag refused because the pointer would leave the isolated geet window.") }
+        if requireTarget {
+            var ancestor: AXUIElement? = hit, matched = false
+            for _ in 0..<25 {
+                guard let candidate = ancestor else { break }
+                if CFEqual(candidate, element) { matched = true; break }
+                guard let parent = attribute(candidate, "AXParent"), CFGetTypeID(parent) == AXUIElementGetTypeID() else { break }
+                ancestor = unsafeBitCast(parent, to: AXUIElement.self)
+            }
+            guard matched else { dragFailure("The drag target is clipped or covered.") }
+        }
+        guard let event = CGEvent(mouseEventSource: nil, mouseType: kind, mouseCursorPosition: point, mouseButton: .left) else { dragFailure("Could not create a drag event.") }
+        event.setIntegerValueField(.mouseEventDeltaX, value: Int64((point.x - current.x).rounded()))
+        event.setIntegerValueField(.mouseEventDeltaY, value: Int64((point.y - current.y).rounded()))
+        current = point; event.flags = []; event.setIntegerValueField(.mouseEventClickState, value: 1)
+        event.post(tap: .cghidEventTap)
+        if kind == .leftMouseDown { down = true }
+        if kind == .leftMouseUp { down = false }
+        Thread.sleep(forTimeInterval: kind == .leftMouseDragged ? 0.025 : 0.12)
+    }
+    send(.mouseMoved, start, requireTarget: true)
+    send(.leftMouseDown, start, requireTarget: true)
+    for step in 1...20 { send(.leftMouseDragged, CGPoint(x: start.x + dx * Double(step) / 20, y: start.y + dy * Double(step) / 20)) }
+    send(.leftMouseUp, current)
+    print("Dragged by \(dx), \(dy) inside isolated geet")
+    result = .success
+case "scroll-right", "scroll-left":
+    result = AXUIElementPerformAction(element, (arguments[2] == "scroll-right" ? "AXScrollRightByPage" : "AXScrollLeftByPage") as CFString)
 case "click", "right-click":
     guard arguments.count == 4 || arguments.count == 6,
           let position = attribute(element, "AXPosition"), CFGetTypeID(position) == AXValueGetTypeID(),

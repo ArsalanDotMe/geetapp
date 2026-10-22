@@ -44,7 +44,7 @@ enum CompletionValidation {
             try await snapshot("add", "04-add-link")
 
             // The curated card uses exactly the import/play path below.
-            let pick = AppStore.discover[1]
+            let pick = AppStore.discover.first { $0.id == "classroom" }!
             try await importLink(pick.url.absoluteString)
             guard let playlist = store.savedCollection(for: pick) else { throw GeetError.message("Discover import did not appear in the library.") }
             try check("discover_add_to_library", playlist.tracks.count > 1)
@@ -100,8 +100,10 @@ enum CompletionValidation {
                 do {
                     if store.savedCollection(for: candidate) == nil { try await importLink(candidate.url.absoluteString) }
                     guard let saved = store.savedCollection(for: candidate) else { throw GeetError.message("Missing curated collection.") }
-                    store.play(saved, index: 0)
+                    let libraryCount = store.library.collections.count
+                    store.playDiscover(candidate)
                     try await ready(player, seconds: 65)
+                    try check("discover_\(candidate.id)_preview_is_separate", player.collectionID == candidate.previewID && store.library.collections.count == libraryCount)
                     record("discover_\(candidate.id)_native_playback", true, "\(saved.tracks.count) available entries")
                     store.playDiscover(candidate)
                     try check("discover_\(candidate.id)_pause_matches_icon", !player.isPlaying)

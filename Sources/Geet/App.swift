@@ -8,6 +8,16 @@ import ScreenCaptureKit
 @main
 enum GeetMain {
     @MainActor static func main() {
+        if let index = CommandLine.arguments.firstIndex(of: "--validate-discover-feed"), CommandLine.arguments.indices.contains(index + 1) {
+            do {
+                let feed = try DiscoverFeed.decode(Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[index + 1])))
+                print("Valid Discover feed: \(feed.categories.count) categories, \(feed.categories.flatMap(\.items).count) items")
+                exit(0)
+            } catch {
+                fputs("Invalid Discover feed. Check schemaVersion, category limits, item fields, and YouTube IDs.\n", stderr)
+                exit(1)
+            }
+        }
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
         let delegate = AppDelegate()
@@ -58,11 +68,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                 let sequence = self.captureSequence
                 Task { @MainActor in
                     var state: [String: String] = ["panel_visible": String(self.popover.isShown), "playing": String(self.store.player.isPlaying),
-                        "loading": String(self.store.player.isLoading), "pipeline": String(self.store.player.hasMediaPipeline),
+                        "loading": String(self.store.player.isLoading), "discover_loading": self.store.discoverLoadingID ?? "", "collection_id": self.store.player.collectionID ?? "", "pipeline": String(self.store.player.hasMediaPipeline),
                         "progress_observer": String(self.store.player.hasProgressObserver), "collections": String(self.store.library.collections.count),
                         "track": self.store.player.track?.title ?? "", "position": String(self.store.player.media?.currentTime().seconds ?? 0),
                         "active": String(NSApp.isActive), "key_window": String(NSApp.keyWindow?.windowNumber ?? -1),
                         "first_responder": String(describing: NSApp.keyWindow?.firstResponder), "key_events": self.keyEvents.joined(separator: "|")]
+                    if let view = self.popover.contentViewController?.view {
+                        state["shelf_offsets"] = self.shelfOffsets(view).joined(separator: "|")
+                    }
                     do { try await self.captureWindow(to: output.appendingPathComponent("ui-\(sequence).png")) }
                     catch { state["capture_error"] = error.localizedDescription }
                     try? Paths.write(state, to: output.appendingPathComponent("ui-\(sequence).json"))
@@ -71,7 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             captureSignal?.resume()
             print("Interactive validation PID: \(ProcessInfo.processInfo.processIdentifier)"); fflush(stdout)
         }
-        if CommandLine.arguments.contains("--capture") || CommandLine.arguments.contains("--validate-library") || CommandLine.arguments.contains("--interactive-validation") {
+        if CommandLine.arguments.contains("--capture") || CommandLine.arguments.contains("--validate-library") || CommandLine.arguments.contains("--validate-discover") || CommandLine.arguments.contains("--interactive-validation") {
             popover.behavior = .applicationDefined
         }
         if let index = CommandLine.arguments.firstIndex(of: "--appearance"), CommandLine.arguments.indices.contains(index + 1) {
@@ -107,6 +120,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                     self.show(screen: screen, inspectClipboard: false)
                     try await Task.sleep(for: .seconds(2))
                     try await self.captureWindow(to: destination)
+                }
+                exit(passed ? 0 : 1)
+            }
+        }
+        if CommandLine.arguments.contains("--validate-discover"), let directory = ProcessInfo.processInfo.environment["GEET_VALIDATION_DIR"] {
+            Task {
+                try? await Task.sleep(for: .milliseconds(300))
+                self.show(screen: "discover", inspectClipboard: false)
+                try? await Task.sleep(for: .seconds(1))
+                let passed = await DiscoverValidation.run(store: store) { name in
+                    try await self.captureWindow(to: URL(fileURLWithPath: directory).appendingPathComponent(name + ".png"))
                 }
                 exit(passed ? 0 : 1)
             }
@@ -210,6 +234,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         #endif
     }
     #if DEBUG
+    private func shelfOffsets(_ view: NSView) -> [String] {
+        let own = (view as? DraggableShelfScrollView).map { ["\($0.identifier?.rawValue ?? "shelf"):\($0.contentView.bounds.origin.x)"] } ?? []
+        return own + view.subviews.flatMap(shelfOffsets)
+    }
     private func captureWindow(to destination: URL) async throws {
         let content = try await SCShareableContent.currentProcess
         let number = popover.contentViewController?.view.window?.windowNumber ?? -1

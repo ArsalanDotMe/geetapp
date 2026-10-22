@@ -28,18 +28,18 @@ struct PanelView: View {
             header
             if settings { settingsView }
             else if support { supportView }
-            else if let id = detail, let collection = store.library.collections.first(where: { $0.id == id }) { detailView(collection) }
+            else if let id = detail, let collection = store.collection(for: id) { detailView(collection) }
             else {
                 CollectionPicker(selection: $tab).frame(height: 28)
                 if searching {
                     TextField(tab == 0 ? "Search your library" : "Search Discover", text: $search).textFieldStyle(.roundedBorder)
                         .onExitCommand { searching = false; search = "" }
                 }
-                ScrollView {
-                    if tab == 0 { libraryView } else { discoverView }
+                if tab == 0 {
+                    ScrollView { libraryView }.scrollIndicators(.never).frame(maxHeight: .infinity)
+                } else {
+                    DiscoverBrowser(store: store, player: player, search: search).frame(maxHeight: .infinity)
                 }
-                .scrollIndicators(.hidden)
-                .frame(maxHeight: .infinity)
                 if let copied = store.clipboardLink, !store.busy {
                     HStack {
                         Button { store.add(copied) } label: { Label("Add copied link", systemImage: "link") }
@@ -59,6 +59,7 @@ struct PanelView: View {
             }
             if player.track != nil || store.preview {
                 TransportView(player: player, clock: player.clock, artwork: store.artwork, preview: store.preview, acceptsSpace: !adding && !searching,
+                              compact: tab == 1 && detail == nil && !settings && !support,
                               showQueue: {
                                   let queueID = player.collectionID ?? store.library.collections.first?.id
                                   let isShowingQueue = !settings && !support && detail != nil && detail == queueID
@@ -118,7 +119,7 @@ struct PanelView: View {
             if detail != nil || settings || support {
                 Button { detail = nil; settings = false; support = false } label: {
                     Image(systemName: "chevron.left").font(.system(size: 14, weight: .semibold)).frame(width: 28, height: 28).contentShape(Rectangle())
-                }.buttonStyle(.plain).help("Back to your library").accessibilityLabel("Back to your library")
+                }.buttonStyle(.plain).help(tab == 1 ? "Back to Discover" : "Back to library").accessibilityLabel(tab == 1 ? "Back to Discover" : "Back to library")
             }
             Text(settings ? "Settings" : support ? "Support Geet" : "Geet")
                 .font(.system(size: 22, weight: .bold, design: .rounded)).tracking(-0.5)
@@ -244,6 +245,13 @@ struct PanelView: View {
     @ViewBuilder private func collectionMenuItems(_ collection: Collection) -> some View {
         Button("Play from beginning") { store.play(collection, beginning: true) }
         Button("View tracks") { detail = collection.id }
+        if collection.id.hasPrefix("discover:") {
+            if let pick = store.discoverFeed.categories.flatMap(\.items).first(where: { $0.url == collection.source }) {
+                Button(store.savedCollection(for: pick) == nil ? "Add to library" : "In your library") { store.addDiscover(pick) }
+                    .disabled(store.savedCollection(for: pick) != nil || store.busy)
+            }
+            Button("Open on YouTube") { NSWorkspace.shared.open(collection.source) }
+        } else {
         Button("Move to top") { store.moveToTop(collection) }
         Divider()
         Button(collection.keepsOffline ? "Stop keeping offline" : "Keep offline") {
@@ -258,66 +266,7 @@ struct PanelView: View {
         Button("Open on YouTube") { NSWorkspace.shared.open(collection.source) }
         Divider()
         Button("Remove from library", role: .destructive) { store.remove(collection) }
-    }
-    private var discoverView: some View {
-        LazyVStack(alignment: .leading, spacing: 14) {
-            Text("Settle into something good.").font(.system(size: 21, weight: .semibold, design: .rounded)).padding(.top, 5)
-            Text("A few places to find your focus.").font(.system(size: 13)).foregroundStyle(.secondary)
-            ForEach(AppStore.discover.filter { search.isEmpty || $0.title.localizedCaseInsensitiveContains(search) || $0.creator.localizedCaseInsensitiveContains(search) }) { pick in
-                let saved = store.savedCollection(for: pick)
-                let importing = store.importingCollectionID == (pick.playlistID.map { "playlist:\($0)" } ?? "video:\(pick.videoID)")
-                let active = saved?.id == player.collectionID && (player.isPlaying || player.isLoading)
-                VStack(alignment: .leading, spacing: 0) {
-                    CoverArt(url: pick.thumbnail, store: store.artwork).frame(height: 145).clipped()
-                    HStack {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(pick.title).font(.system(size: 14, weight: .semibold))
-                            HStack(spacing: 6) {
-                                Text(pick.creator).lineLimit(1)
-                                Text("·").accessibilityHidden(true)
-                                discoverKindLabel(pick.kind).fixedSize()
-                            }.font(.system(size: 12)).foregroundStyle(.secondary).allowsHitTesting(false)
-                        }
-                        Spacer()
-                        Button { store.playDiscover(pick) } label: {
-                            Group {
-                                if saved?.id == player.collectionID && player.isLoading { ProgressView().controlSize(.small) }
-                                else { Image(systemName: active ? "pause.fill" : "play.fill").font(.system(size: 14, weight: .semibold)) }
-                            }
-                            .foregroundStyle(Color(red: 0.137, green: 0.196, blue: 0.275)).frame(width: 36, height: 36)
-                                .background(.white, in: Circle()).contentShape(Circle())
-                        }.buttonStyle(PressScale()).disabled(store.busy && saved == nil)
-                            .help(active ? "Pause \(pick.title)" : "Play \(pick.title)")
-                            .accessibilityLabel(active ? "Pause \(pick.title)" : "Play \(pick.title)")
-                            .accessibilityIdentifier("discover-play-\(pick.id)")
-                        if saved != nil {
-                            Image(systemName: "checkmark").foregroundStyle(sage).frame(width: 36, height: 36)
-                                .help("In your library").accessibilityLabel("In your library").accessibilityIdentifier("discover-saved-\(pick.id)")
-                        } else if importing {
-                            ProgressView().controlSize(.small).frame(width: 36, height: 36)
-                                .accessibilityLabel("Adding \(pick.title) to library").accessibilityIdentifier("discover-adding-\(pick.id)")
-                        } else {
-                            Button { store.add(pick.url.absoluteString) } label: { Image(systemName: "plus").frame(width: 36, height: 36).contentShape(Rectangle()) }
-                                .buttonStyle(.plain).disabled(store.busy).help("Add to library").accessibilityLabel("Add \(pick.title) to library").accessibilityIdentifier("discover-add-\(pick.id)")
-                        }
-                    }.padding(12)
-                }.background(.quaternary.opacity(0.35), in: .rect(cornerRadius: 12)).clipShape(.rect(cornerRadius: 12))
-            }
-            if !search.isEmpty && !AppStore.discover.contains(where: { $0.title.localizedCaseInsensitiveContains(search) || $0.creator.localizedCaseInsensitiveContains(search) }) {
-                Text("No playlists found. Try a different name or creator.").font(.system(size: 13)).foregroundStyle(.secondary)
-            }
         }
-    }
-    private func discoverKindLabel(_ kind: DiscoverPick.Kind) -> some View {
-        let symbol: String
-        switch kind {
-        case .radio: symbol = "dot.radiowaves.left.and.right"
-        case .playlist: symbol = "music.note.list"
-        case .mix: symbol = "waveform"
-        }
-        return Label(kind.rawValue, systemImage: symbol)
-            .labelStyle(.titleAndIcon)
-            .accessibilityLabel(kind.rawValue)
     }
     private func detailView(_ collection: Collection) -> some View {
         VStack(spacing: 12) {
@@ -423,7 +372,7 @@ struct PanelView: View {
     private func submitLink() { guard !store.busy else { return }; store.add(link); if (try? YouTubeLink(link)) != nil { adding = false; link = "" } }
 }
 
-private struct PressScale: ButtonStyle {
+struct PressScale: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
         // Glass draws the circle but does not make its transparent padding clickable.
@@ -438,6 +387,7 @@ struct TransportView: View {
     let artwork: ArtworkStore
     let preview: Bool
     var acceptsSpace = true
+    var compact = false
     let showQueue: () -> Void
     @State private var scrubbing = false
     @State private var scrubPosition = 0.0
@@ -446,9 +396,9 @@ struct TransportView: View {
     private var elapsed: Double { preview ? 754 : scrubbing ? scrubPosition : clock.position }
     private var duration: Double { preview ? 2538 : max(clock.duration, 1) }
     var body: some View {
-        VStack(spacing: 7) {
+        VStack(spacing: compact ? 4 : 7) {
             HStack(spacing: 10) {
-                CoverArt(url: player.track?.thumbnail, store: artwork).frame(width: 43, height: 43).clipShape(.rect(cornerRadius: 7))
+                CoverArt(url: player.track?.thumbnail, store: artwork).frame(width: compact ? 32 : 43, height: compact ? 32 : 43).clipShape(.rect(cornerRadius: 7))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(player.track?.title ?? "After Hours").font(.system(size: 13, weight: .semibold)).lineLimit(1)
                     Text(preview ? "Late Night Coding" : player.collectionTitle).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
@@ -474,7 +424,7 @@ struct TransportView: View {
                 transportButton("backward.end.fill", label: "Previous", action: player.previous)
                 Button { player.toggle() } label: {
                     Group { if player.isLoading { ProgressView().controlSize(.small) } else { Image(systemName: player.isPlaying || preview ? "pause.fill" : "play.fill").font(.system(size: 18, weight: .medium)) } }
-                        .foregroundStyle(colorScheme == .dark ? Color.black.opacity(0.85) : .white).frame(width: 43, height: 43).background(sage, in: Circle())
+                        .foregroundStyle(colorScheme == .dark ? Color.black.opacity(0.85) : .white).frame(width: compact ? 36 : 43, height: compact ? 36 : 43).background(sage, in: Circle())
                 }.buttonStyle(PressScale()).help(player.isLoading ? "Cancel playback" : player.isPlaying ? "Pause" : "Play").accessibilityLabel(player.isLoading ? "Cancel playback" : player.isPlaying ? "Pause" : "Play")
                     .keyboardShortcut(acceptsSpace ? KeyboardShortcut(.space, modifiers: []) : nil)
                     .accessibilityIdentifier("transport-play")
@@ -490,7 +440,7 @@ struct TransportView: View {
                     }
                 Spacer(minLength: 0)
             }
-        }.padding(12)
+        }.padding(compact ? 8 : 12)
             .background(.quaternary.opacity(0.3), in: .rect(cornerRadius: 14))
             .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(0.35), lineWidth: 0.5))
     }

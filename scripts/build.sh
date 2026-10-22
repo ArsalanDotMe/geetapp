@@ -11,7 +11,10 @@ if [[ "$configuration" == release && -z "${GEET_BUILD_DESTINATION:-}" ]]; then d
 mkdir -p "$destination/Contents/MacOS" "$destination/Contents/Resources"
 cp "$products/Geet" "$destination/Contents/MacOS/Geet"
 cp -R "$products/Geet_Geet.bundle" "$destination/Contents/Resources/"
+cp -R "$products/Geet_GeetCore.bundle" "$destination/Contents/Resources/"
 cp scripts/Info.plist "$destination/Contents/Info.plist"
+feed_url="${GEET_DISCOVER_URL:-$(python3 -c 'import json; print(json.load(open("Discover/hosting.json"))["url"])')}"
+/usr/libexec/PlistBuddy -c "Add :GeetDiscoverFeedURL string $feed_url" "$destination/Contents/Info.plist"
 if [[ -f Sources/Geet/Resources/Geet.icns ]]; then cp Sources/Geet/Resources/Geet.icns "$destination/Contents/Resources/Geet.icns"; fi
 if [[ -d Tools ]]; then
   mkdir -p "$destination/Contents/Resources/Tools"

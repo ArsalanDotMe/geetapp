@@ -33,7 +33,7 @@ This produces `build/Release/Geet.app`. Both builds are locally ad-hoc signed. P
 - Explicit offline downloads and the optional listening cache share range-based audio storage. Audio is not downloaded a second time for caching. Partial files are not presented as complete offline downloads. Live radio stays online only.
 - The listening cache is limited to 2 GB; all saved audio is limited to 10 GB and 2,048 entries. Explicitly saved tracks are protected from automatic eviction. Storage is shown in Settings. Stopping offline retention removes files that aren’t shared with another saved playlist.
 - A playlist import is limited to its first 1,000 available entries, with a notice when truncated. Private, deleted, and unavailable entries are excluded. Intentional duplicate video occurrences remain in the queue.
-- Discover contains a small bundled selection verified against public Lofi Girl and Chillhop sources on 21 October 2026. It is curated, not a live popularity ranking. Streams can be removed or restricted by their providers.
+- Discover loads curated categories from a public R2 feed, with a validated local cache and bundled fallback. Browse shelves by trackpad or mouse drag, open a category with its arrow, and preview radios, mixes, or playlists without saving them. Add to library is separate. See [Discover publishing](Discover/README.md). Provider links can still be removed or restricted.
 
 Offline listening will be unlocked by a one-time $5 contribution. **Debug builds enable it for development; release builds keep it locked until checkout is integrated.** The support screen says checkout is coming soon. No purchase or entitlement is written to the user’s library.
 
@@ -79,6 +79,6 @@ The [selected design](Design/References/option-2-cover-stories.png) is retained 
 
 ## Privacy and dependencies
 
-Library data and local caches live in `~/Library/Application Support/Geet`. YouTube and its media/image hosts receive requests needed for the links you use. Clipboard links are only read when opening the panel. No browser cookies, credentials, or private accounts are imported.
+Library data and local caches live in `~/Library/Application Support/Geet`. Cloudflare receives requests for the public Discover feed. YouTube and its media/image hosts receive requests needed for the links you use. Clipboard links are only read when opening the panel. No browser cookies, credentials, or private accounts are imported.
 
 yt-dlp and Deno are third-party dependencies. Their upstream licenses and redistribution requirements apply, including the components packaged in the yt-dlp binary. See [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [Deno](https://github.com/denoland/deno). This project does not claim YouTube API approval.

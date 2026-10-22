@@ -30,6 +30,7 @@ final class Player: ObservableObject {
     var onTrackChanged: ((Track) -> Void)?
     private(set) var media: AVPlayer?
     private var collection: Collection?
+    var currentCollection: Collection? { collection }
     private var queue = PlaybackQueue()
     private var position = 0.0
     private var duration = 0.0

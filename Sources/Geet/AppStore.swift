@@ -15,6 +15,16 @@ final class AppStore: ObservableObject {
     @Published var dependencyText = "Checked when you first open a link"
     @Published var clipboardLink: String?
     @Published var offlineEnabled: Bool
+    @Published private(set) var discoverFeed: DiscoverFeed
+    @Published private(set) var discoverRefreshing = false
+    @Published private(set) var discoverError: String?
+    @Published private(set) var discoverLoadingID: String?
+    private(set) var discoverPreview: Collection?
+    private let discoverClient: DiscoverFeedClient?
+    private let discoverImporter: (YouTubeLink) async throws -> Collection
+    private var discoverTask: Task<Void, Never>?
+    private var discoverPlayTask: Task<Void, Never>?
+    private var discoverGeneration = UUID()
     let player: Player
     let resolver: Resolver
     let cache: MediaCache
@@ -28,15 +38,20 @@ final class AppStore: ObservableObject {
     private var clipboardTask: Task<Void, Never>?
     private var clipboardChange = -1
     private var saveWork: DispatchWorkItem?
-    static let discover: [DiscoverPick] = [
-        DiscoverPick(id: "lofi", title: "Lofi hip hop radio", creator: "Lofi Girl", mood: "A familiar place to focus", kind: .radio, videoID: "0sfDth4lMLc"),
-        DiscoverPick(id: "classroom", title: "Chillhop in the Classroom", creator: "Chillhop Music", mood: "Music to get things done", kind: .playlist, videoID: "mypnwpywaaw", playlistID: "PLt7bG0K25iXhu8bSbLsoWFBf-xSyLwy2_"),
-        DiscoverPick(id: "fall", title: "Chillhop Essentials Fall", creator: "Chillhop Music", mood: "Settle into the season", kind: .playlist, videoID: "jiua2V9q9V0", playlistID: "PLt7bG0K25iXjIl0bopl1TY8_6n35gsgcd"),
-        DiscoverPick(id: "winter", title: "Chillhop Essentials Winter", creator: "Chillhop Music", mood: "A slower kind of afternoon", kind: .playlist, videoID: "Zq0cZnA2Dhc", playlistID: "PLt7bG0K25iXh5RbylpYcJwsHBpM0dGc2i")
-    ]
-    init(preview: Bool = false, root overrideRoot: URL? = nil) {
+    static var discover: [DiscoverPick] { DiscoverFeed.bundled.categories.flatMap(\.items) }
+    var canRefreshDiscover: Bool { discoverClient != nil && !preview }
+    init(preview: Bool = false, root overrideRoot: URL? = nil, discoverURL: URL? = nil,
+         discoverImporter: ((YouTubeLink) async throws -> Collection)? = nil) {
         self.preview = preview
         self.root = overrideRoot ?? (preview ? FileManager.default.temporaryDirectory.appendingPathComponent("geet-design-preview") : Paths.support)
+        let endpoint = discoverURL ?? Self.discoverEndpoint
+        let feedFile = self.root.appendingPathComponent("discover-cache.json")
+        discoverClient = endpoint.map { DiscoverFeedClient(endpoint: $0, cacheFile: feedFile) }
+        discoverFeed = endpoint.flatMap { DiscoverFeedClient.cachedFeed(at: feedFile, endpoint: $0) } ?? .bundled
+        #if DEBUG
+        if preview, let path = ProcessInfo.processInfo.environment["GEET_DISCOVER_FIXTURE"],
+           let data = try? Data(contentsOf: URL(fileURLWithPath: path)), let feed = try? DiscoverFeed.decode(data) { discoverFeed = feed }
+        #endif
         #if DEBUG
         library = preview ? PreviewData.library : Paths.read(LibraryDocument.self, from: root.appendingPathComponent("library.json")) ?? LibraryDocument()
         offlineEnabled = true
@@ -45,6 +60,7 @@ final class AppStore: ObservableObject {
         offlineEnabled = false
         #endif
         resolver = Resolver(root: root, bundledTools: Bundle.main.resourceURL?.appendingPathComponent("Tools"))
+        self.discoverImporter = discoverImporter ?? { [resolver] link in try await resolver.importCollection(link) }
         cache = MediaCache(root: root.appendingPathComponent("Media", isDirectory: true))
         player = Player(resolver: resolver, cache: cache)
         player.shuffle = library.shuffle; player.repeatMode = library.repeatMode; player.volume = library.volume
@@ -75,7 +91,8 @@ final class AppStore: ObservableObject {
         // No startup Tasks, dependency probes, artwork fetches, or AVPlayer allocation.
     }
     func play(_ collection: Collection, index: Int? = nil, beginning: Bool = false) {
-        library.selectedID = collection.id; scheduleSave()
+        cancelDiscoverPreview()
+        if library.collections.contains(where: { $0.id == collection.id }) { library.selectedID = collection.id; scheduleSave() }
         player.play(collection, index: index, fromBeginning: beginning)
     }
     func add(_ text: String, playAfter: Bool = false) {
@@ -196,8 +213,63 @@ final class AppStore: ObservableObject {
         library.collections.first { $0.source == pick.url }
     }
     func playDiscover(_ pick: DiscoverPick) {
-        if let collection = savedCollection(for: pick) { play(collection) }
-        else { add(pick.url.absoluteString, playAfter: true) }
+        if discoverLoadingID == pick.collectionID { cancelDiscoverPreview(); return }
+        cancelDiscoverPreview()
+        if player.collectionID == pick.previewID { player.toggle(); return }
+        if let loaded = discoverPreview, loaded.source == pick.url { player.play(loaded); return }
+        if let saved = savedCollection(for: pick) {
+            let temporary = DiscoverPlayback.preview(saved)
+            discoverPreview = temporary; player.play(temporary); return
+        }
+        let token = UUID(); discoverGeneration = token
+        discoverLoadingID = pick.collectionID; message = nil
+        discoverPlayTask = Task {
+            do {
+                await resolver.cancelBackground()
+                let loaded = try await discoverImporter(YouTubeLink(pick.url.absoluteString))
+                try Task.checkCancellation()
+                guard discoverGeneration == token else { return }
+                let temporary = DiscoverPlayback.preview(loaded)
+                discoverPreview = temporary; discoverLoadingID = nil; discoverPlayTask = nil
+                player.play(temporary)
+            } catch {
+                guard discoverGeneration == token else { return }
+                discoverLoadingID = nil; discoverPlayTask = nil
+                if !Task.isCancelled { message = "This listen couldn't be played. Try again." }
+            }
+        }
+    }
+    func cancelDiscoverPreview() {
+        discoverGeneration = UUID(); discoverPlayTask?.cancel(); discoverPlayTask = nil; discoverLoadingID = nil
+    }
+    func addDiscover(_ pick: DiscoverPick) {
+        guard !busy, savedCollection(for: pick) == nil else { return }
+        if let temporary = discoverPreview, temporary.source == pick.url {
+            library.collections.append(DiscoverPlayback.savedCopy(temporary, for: pick)); scheduleSave()
+        } else { add(pick.url.absoluteString) }
+    }
+    func collection(for id: String) -> Collection? {
+        library.collections.first { $0.id == id } ?? (player.currentCollection?.id == id ? player.currentCollection : nil)
+    }
+    func refreshDiscover(force: Bool = false) {
+        guard canRefreshDiscover, !discoverRefreshing, let discoverClient else { return }
+        discoverRefreshing = true
+        discoverTask = Task {
+            defer { discoverRefreshing = false; discoverTask = nil }
+            do {
+                let feed = try await discoverClient.refresh(force: force)
+                try Task.checkCancellation()
+                discoverFeed = feed; discoverError = nil
+            } catch {
+                if !Task.isCancelled { discoverError = "Couldn't refresh Discover. Your previous picks are still available." }
+            }
+        }
+    }
+    private static var discoverEndpoint: URL? {
+        #if DEBUG
+        if let value = ProcessInfo.processInfo.environment["GEET_DISCOVER_URL"] { return URL(string: value) }
+        #endif
+        return (Bundle.main.object(forInfoDictionaryKey: "GeetDiscoverFeedURL") as? String).flatMap(URL.init(string:))
     }
     func panelOpened(inspectClipboard: Bool = true) {
         player.panelVisible(true)
@@ -230,7 +302,7 @@ final class AppStore: ObservableObject {
         do { if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() } }
         catch { message = error.localizedDescription }
     }
-    func shutdown() { player.shutdown(); importTask?.cancel(); downloadTask?.cancel(); clipboardTask?.cancel(); flushSave() }
+    func shutdown() { cancelDiscoverPreview(); discoverTask?.cancel(); player.shutdown(); importTask?.cancel(); downloadTask?.cancel(); clipboardTask?.cancel(); flushSave() }
     private func updateStorage() async {
         let entries = await cache.snapshot()
         savedTrackIDs = Set(entries.filter(\.complete).map(\.trackID))

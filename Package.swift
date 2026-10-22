@@ -6,7 +6,7 @@ let package = Package(
     platforms: [.macOS(.v26)],
     products: [.executable(name: "Geet", targets: ["Geet"]), .library(name: "GeetCore", targets: ["GeetCore"])],
     targets: [
-        .target(name: "GeetCore"),
+        .target(name: "GeetCore", resources: [.process("Resources")]),
         .executableTarget(name: "Geet", dependencies: ["GeetCore"], resources: [.process("Resources")]),
         .testTarget(name: "GeetCoreTests", dependencies: ["GeetCore"]),
         .testTarget(name: "GeetTests", dependencies: ["Geet", "GeetCore"])
