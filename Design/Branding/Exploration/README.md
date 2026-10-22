@@ -2,6 +2,8 @@
 
 Four initial directions for Geet, the native Mac music player. Geet means song in Hindi and Urdu. The identity should feel quiet, expressive, and familiar enough to live in the menu bar every day.
 
+The Listener direction was selected. The [finished asset package](../Listener/README.md) contains the symbol-only logo and app icon. The text in the exploration boards is not part of the final logo.
+
 The reference is the [Hermes Agent identity](https://hermes-agent.nousresearch.com/), inspected on 21 October 2026. Its reduced black-and-white portrait, strong silhouette, and classical character inform this exploration. Each Geet symbol is a new concept.
 
 ## The Singer

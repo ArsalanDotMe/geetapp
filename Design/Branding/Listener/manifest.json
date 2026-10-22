@@ -1,0 +1,342 @@
+{
+  "brand": "geet",
+  "direction": "Listener",
+  "text_in_logo": false,
+  "palette": {
+    "ink": "#20211C",
+    "ivory": "#F4F0E7",
+    "forest": "#355A48",
+    "amber": "#C19A63"
+  },
+  "source": "Built-in ImageGen refinement of approved 04-listener.png; symbol only, traced to filled vector paths with Potrace 1.16.",
+  "svg": "Actual filled vector paths, with no fonts or embedded raster artwork.",
+  "macos": {
+    "canvas": 1024,
+    "tile": [
+      100,
+      100,
+      824,
+      824
+    ],
+    "template_point_size": 18,
+    "iconset_pixel_sizes": [
+      16,
+      32,
+      64,
+      128,
+      256,
+      512,
+      1024
+    ]
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 4336,
+      "sha256": "19d57f9afe37926f406ac6ad044860f7ebe24da003fd23cb2eef76a3bf53ee1a"
+    },
+    {
+      "path": "export-assets.py",
+      "bytes": 7096,
+      "sha256": "4670e1eed3dff681c958b0c57cfe2c9d452f195b81f7dd7ff6b4f6a3c2f784cb"
+    },
+    {
+      "path": "macos/Geet.icns",
+      "bytes": 265059,
+      "sha256": "0af34d5096f663d481354e821ca9ce8b9d78f3e90c39dc471ce36f589f7acde6"
+    },
+    {
+      "path": "macos/Geet.iconset/icon_128x128.png",
+      "bytes": 8013,
+      "sha256": "dbc068496938f97f259149383ceffa5cb2671e0ffedefb7198610ec9a9d36432"
+    },
+    {
+      "path": "macos/Geet.iconset/icon_128x128@2x.png",
+      "bytes": 17936,
+      "sha256": "5839c0df03ef434b9e8cba48d68da41c059e1cfafdef0914dc2e7be1cd530efb"
+    },
+    {
+      "path": "macos/Geet.iconset/icon_16x16.png",
+      "bytes": 639,
+      "sha256": "58b2cefa914cec13acb91b3f2868550be44b41277c20b8e1d69d30f9a6eda955"
+    },
+    {
+      "path": "macos/Geet.iconset/icon_16x16@2x.png",
+      "bytes": 1466,
+      "sha256": "41a57d75a3ed6d33c18a27561d9d6802a3d79d24cf8ef2a9d811608463a82dfc"
+    },
+    {
+      "path": "macos/Geet.iconset/icon_256x256.png",
+      "bytes": 17936,
+      "sha256": "5839c0df03ef434b9e8cba48d68da41c059e1cfafdef0914dc2e7be1cd530efb"
+    },
+    {
+      "path": "macos/Geet.iconset/icon_256x256@2x.png",
+      "bytes": 39906,
+      "sha256": "1f235c8eaa8ac35a8db8c62f1e23ea4ba0d5eea7f6034489c70895ce5dec1d54"
+    },
+    {
+      "path": "macos/Geet.iconset/icon_32x32.png",
+      "bytes": 1466,
+      "sha256": "41a57d75a3ed6d33c18a27561d9d6802a3d79d24cf8ef2a9d811608463a82dfc"
+    },
+    {
+      "path": "macos/Geet.iconset/icon_32x32@2x.png",
+      "bytes": 3485,
+      "sha256": "b63cf0625d36119ab286590a8efc3adfdfda80d2e2ae7c684e35c4ccd1727275"
+    },
+    {
+      "path": "macos/Geet.iconset/icon_512x512.png",
+      "bytes": 39906,
+      "sha256": "1f235c8eaa8ac35a8db8c62f1e23ea4ba0d5eea7f6034489c70895ce5dec1d54"
+    },
+    {
+      "path": "macos/Geet.iconset/icon_512x512@2x.png",
+      "bytes": 88257,
+      "sha256": "059d56d0673db8f78a232ce12ede754dde72663dea8eaf051b5e61992e33c671"
+    },
+    {
+      "path": "macos/geet-menu-bar-template.pdf",
+      "bytes": 5335,
+      "sha256": "b07f9a38526d6b893c06f5f70055ff23e1fe6f7fe2314a3fb21f2be61153cf13"
+    },
+    {
+      "path": "macos/geet-menu-bar-template.png",
+      "bytes": 510,
+      "sha256": "9f51869d377fbaaf6cb6be231642b2e45c012f851a250d635651ae095d1b982e"
+    },
+    {
+      "path": "macos/geet-menu-bar-template@2x.png",
+      "bytes": 1140,
+      "sha256": "3c6f7117be1b309aac955547bcd084f4634f392dcece3998a3c6a881645038ea"
+    },
+    {
+      "path": "pdf/geet-logo-black.pdf",
+      "bytes": 7169,
+      "sha256": "e324fd89e409a13e1369c05215625a349fcebdefc361b9d53b99c8506363a734"
+    },
+    {
+      "path": "pdf/geet-logo-forest.pdf",
+      "bytes": 7185,
+      "sha256": "4456b2d3c6d97a641d0c456c0788cf3c4e888288d37825f78e680da6e9534dbd"
+    },
+    {
+      "path": "pdf/geet-logo-ink.pdf",
+      "bytes": 7179,
+      "sha256": "24d3b4beda59afa8c1e774fce4dad2ec342992195badd76165176bd6b726d464"
+    },
+    {
+      "path": "pdf/geet-logo-ivory.pdf",
+      "bytes": 7182,
+      "sha256": "220e47b2cbf417ac329375e16224f1edffc1403c2a9d03f30dbd71efe7c9e004"
+    },
+    {
+      "path": "pdf/geet-logo-white.pdf",
+      "bytes": 7169,
+      "sha256": "661f95967ad149f8e5de0a853d883682ed6835ccbc0b1e065e6e34fce1f9b6ab"
+    },
+    {
+      "path": "png/geet-app-icon-1024.png",
+      "bytes": 88257,
+      "sha256": "059d56d0673db8f78a232ce12ede754dde72663dea8eaf051b5e61992e33c671"
+    },
+    {
+      "path": "png/geet-app-icon-2048.png",
+      "bytes": 198410,
+      "sha256": "893c68bcc5c204bdd321f445cb712d10c9a06addd7b4e2a3144e332267c5c39c"
+    },
+    {
+      "path": "png/geet-app-icon-unmasked-1024.png",
+      "bytes": 74448,
+      "sha256": "03ae3fccc8eb94b6b45108e3e9e403b9c5f9dad9282906391d4a27a03d88f85b"
+    },
+    {
+      "path": "png/geet-logo-black-1024.png",
+      "bytes": 55977,
+      "sha256": "d247451ef23f4be7e48981f36a714c62dedfaa71c35f96a97bec1e297630b743"
+    },
+    {
+      "path": "png/geet-logo-black-2048.png",
+      "bytes": 135826,
+      "sha256": "ceec5178185d9368a4da3ff5461db74c9be30a27f85e298d5c567685991954a3"
+    },
+    {
+      "path": "png/geet-logo-black-512.png",
+      "bytes": 24540,
+      "sha256": "a0edfe7d9deb42818463cb0ef4a8b90615892fb7e50e2bfe630eb0a3302bcb7a"
+    },
+    {
+      "path": "png/geet-logo-forest-1024.png",
+      "bytes": 89040,
+      "sha256": "46a03f253fea9b6147b5485dbdd6b21ee736cd45bca36928a958e8c0217f0a7c"
+    },
+    {
+      "path": "png/geet-logo-forest-2048.png",
+      "bytes": 195409,
+      "sha256": "af67861a346d757bbdb60f71f664119f5761bfc329e1e57adbbb04203608c097"
+    },
+    {
+      "path": "png/geet-logo-forest-512.png",
+      "bytes": 41374,
+      "sha256": "9bf84b18482aef1c5c0147281ab2ab48d01d8c7c3866f89cfc6a9e93d19e1d6c"
+    },
+    {
+      "path": "png/geet-logo-ink-1024.png",
+      "bytes": 87193,
+      "sha256": "c6a99defca3b60ab31f6c556250f430e78a58f62a75bc4f8c18d8c7323111fd0"
+    },
+    {
+      "path": "png/geet-logo-ink-2048.png",
+      "bytes": 190669,
+      "sha256": "b463a8d879a04af31ebe41fab1e53e8dc83db145c8a80a1505f193c9c68b1d6a"
+    },
+    {
+      "path": "png/geet-logo-ink-512.png",
+      "bytes": 40285,
+      "sha256": "9d0320baba9581df044f20c36e21a81759726fc4af5db178c8d3adc3f68d1030"
+    },
+    {
+      "path": "png/geet-logo-ivory-1024.png",
+      "bytes": 86776,
+      "sha256": "047d803e1fbdde1f5b65fc2653599835fb0c756c286cc350b7de27d802f66fdb"
+    },
+    {
+      "path": "png/geet-logo-ivory-2048.png",
+      "bytes": 189978,
+      "sha256": "1a140de485f03846bb1c017aa0a6a09eaf7dc33c1d70e630ff7d07492928704f"
+    },
+    {
+      "path": "png/geet-logo-ivory-512.png",
+      "bytes": 40214,
+      "sha256": "4569cca5673ed7486c957cfaa244283f3ef7ca7d79df6a64fd27bdd558f6d45e"
+    },
+    {
+      "path": "png/geet-logo-white-1024.png",
+      "bytes": 68098,
+      "sha256": "2213fa57439790ba48c532b49de1344c74a518d5a2728df60b2ffe885a2a6b78"
+    },
+    {
+      "path": "png/geet-logo-white-2048.png",
+      "bytes": 151682,
+      "sha256": "bce30f1ce109a01d476bc7a01cfadd1c5fa304f3c779b3c76bd3b464b2f6aa1e"
+    },
+    {
+      "path": "png/geet-logo-white-512.png",
+      "bytes": 30804,
+      "sha256": "10e82b9cbbf794a4a8c1aa0ca95db99eafbf785c72f2b4a88abd9177bc9f1842"
+    },
+    {
+      "path": "preview.png",
+      "bytes": 134673,
+      "sha256": "405fd513b69c63adc833ce8f23e491e727931b2d234944dec21a5680207a7765"
+    },
+    {
+      "path": "preview.svg",
+      "bytes": 68044,
+      "sha256": "b6897204225620f2e8eadcee23dcf0eefcbb6fbe9c0f8b48638bb0aa80dc1351"
+    },
+    {
+      "path": "source/generation-prompt.txt",
+      "bytes": 2227,
+      "sha256": "ee4d19c030f4e34d694ec1b30bf7c985de76d2287c4b1f829bcd3a5dd6834686"
+    },
+    {
+      "path": "source/listener-symbol.png",
+      "bytes": 216376,
+      "sha256": "c7df69320695d53399757627c3686993509acff540ff22868f672cbf439e0468"
+    },
+    {
+      "path": "source/listener-traced.svg",
+      "bytes": 7271,
+      "sha256": "d569d58092092c75515acf025ab7705dbff813a7f422e392a1cb4cc3ef6146ee"
+    },
+    {
+      "path": "svg/geet-app-icon-unmasked.svg",
+      "bytes": 7200,
+      "sha256": "ba046b303e5dff7c5b98fca088fb4b81b5a450fa42c898179cfa2d7e1256a421"
+    },
+    {
+      "path": "svg/geet-app-icon.svg",
+      "bytes": 7438,
+      "sha256": "870d24a6a315280636584c264cbd66b71b26afb8c0c539913446ebf888a7b685"
+    },
+    {
+      "path": "svg/geet-logo-black.svg",
+      "bytes": 7143,
+      "sha256": "a64a82a7aca3d20dbac7071cc850fb0a0b8c11a42ae041011f79fdce60f9e367"
+    },
+    {
+      "path": "svg/geet-logo-forest.svg",
+      "bytes": 7143,
+      "sha256": "db53602b1d490339061e14f9b4c213ff051afa00f667daf72b964dae6d5e6011"
+    },
+    {
+      "path": "svg/geet-logo-ink.svg",
+      "bytes": 7143,
+      "sha256": "204456e1b49f0bdf3338a5a5efaaf7c4bc76f0c20e32a1ec705b23f8fa178be2"
+    },
+    {
+      "path": "svg/geet-logo-ivory.svg",
+      "bytes": 7143,
+      "sha256": "dad0105670607e5e39439a03cab5f2d5c21e91e1785120a016df2c989789aace"
+    },
+    {
+      "path": "svg/geet-logo-white.svg",
+      "bytes": 7143,
+      "sha256": "8fe52bf2e9933c214a320a9f8c53c8d2436143a2877c7159e7f7f7921003cc26"
+    },
+    {
+      "path": "svg/geet-logo.svg",
+      "bytes": 7142,
+      "sha256": "d1ca27e25ab376d4978eadc7735f8dc63713a97890ce97cb0947b8e275830ae0"
+    },
+    {
+      "path": "svg/geet-menu-bar-template.svg",
+      "bytes": 7133,
+      "sha256": "2a7651d516099b57104ed115bc4953127e7c7657aa28df63f936cd46785a1f83"
+    },
+    {
+      "path": "typography/Newsreader.ttf",
+      "bytes": 451664,
+      "sha256": "8a08d13f8a6c0d51be379a60af84f945f65369a67e509ee3c3bdcc421254d7c1"
+    },
+    {
+      "path": "typography/OFL.txt",
+      "bytes": 4394,
+      "sha256": "865f0949b59fab5925506f80102dff3d12e8666412daf52d212db969d40adc25"
+    },
+    {
+      "path": "typography/tokens.json",
+      "bytes": 487,
+      "sha256": "ee2fba735e1d0c98dd65a7d3b1ab499e4f9141be85093955dfbf2635e2c2ce93"
+    },
+    {
+      "path": "validation.json",
+      "bytes": 1661,
+      "sha256": "41b7c1578d0a74f87b62efb55fba68238cd3a14f6637848da24ae6e3be956b3f"
+    }
+  ],
+  "typography": {
+    "family": "Newsreader",
+    "file": "Newsreader.ttf",
+    "license": "OFL-1.1",
+    "style": "normal",
+    "weight": 400,
+    "tracking": 0,
+    "display_optical_size": 72,
+    "app_optical_size": "Match point size, clamped to 6\u201372",
+    "roles": {
+      "editorial_heading": {
+        "size_pt": 24,
+        "weight": 400
+      },
+      "support_heading": {
+        "size_pt": 28,
+        "weight": 400
+      }
+    },
+    "ui": "Native macOS system font for controls, body text, settings labels, and playlist rows",
+    "logo_contains_text": false
+  },
+  "app_name_case": "lowercase"
+}

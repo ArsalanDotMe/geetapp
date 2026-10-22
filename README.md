@@ -1,10 +1,12 @@
-# Geet
+# geet
 
 A native macOS 26 menu bar player for collecting YouTube playlists, long mixes, and live radio. SwiftUI and AppKit provide the interface, `AVPlayer` plays audio, and yt-dlp resolves links behind the scenes. No browser player, account, analytics, or web UI is embedded in the app.
 
 ## Run
 
-The local development app is `build/Geet.app`. Open it, then click the waveform in your menu bar. Use **+** to add a public or unlisted YouTube playlist or video. Play resumes each collection’s saved track and position. The arrow beside a playlist opens its individual tracks. Right-click the menu bar icon and choose **Quit geet** to close the app.
+The local development app is `build/Geet.app`. Open it, then click the Listener icon in your menu bar. Use **+** to add a public or unlisted YouTube playlist or video. Play resumes each collection’s saved track and position. The arrow beside a playlist opens its individual tracks. Right-click the menu bar icon and choose **Quit geet** to close the app.
+
+The [brand guide](Design/Branding/README.md) defines Newsreader for geet's name and editorial headings. The Listener logo stays text-free; native macOS fonts are retained for controls and body text.
 
 The first launch opens no windows, performs no network requests, creates no player, and starts no helper processes. yt-dlp is checked lazily on the first operation that needs it. Login launch behaves the same way.
 
@@ -53,7 +55,7 @@ Offline listening will be unlocked by a one-time $5 contribution. **Debug builds
 
 The app prefers native AAC audio and audio-only HLS. For older extractors that expose only muxed live HLS, the lowest-bandwidth native rendition is the final fallback and video tracks are disabled. Normal recorded playback never requests a video format.
 
-For indexed DASH AAC, Geet maps the existing fragment index to a small, immutable HLS playlist on a private loopback endpoint. Encoded audio is unchanged. This gives AVPlayer accurate duration and direct seeking without scanning or downloading an entire long mix. The listener binds only to `127.0.0.1`, uses a random path, accepts at most four connections, and is released with the player. Free streaming keeps chunks in bounded memory; disk retention requires the offline entitlement and an explicit cache or download choice.
+For indexed DASH AAC, geet maps the existing fragment index to a small, immutable HLS playlist on a private loopback endpoint. Encoded audio is unchanged. This gives AVPlayer accurate duration and direct seeking without scanning or downloading an entire long mix. The listener binds only to `127.0.0.1`, uses a random path, accepts at most four connections, and is released with the player. Free streaming keeps chunks in bounded memory; disk retention requires the offline entitlement and an explicit cache or download choice.
 
 ## Validation
 

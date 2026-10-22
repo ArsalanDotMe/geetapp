@@ -3,8 +3,8 @@
 <plist version="1.0"><dict>
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 <key>CFBundleIdentifier</key><string>app.geet.mac</string>
-<key>CFBundleName</key><string>Geet</string>
-<key>CFBundleDisplayName</key><string>Geet</string>
+<key>CFBundleName</key><string>geet</string>
+<key>CFBundleDisplayName</key><string>geet</string>
 <key>CFBundleExecutable</key><string>Geet</string>
 <key>CFBundleIconFile</key><string>Geet</string>
 <key>CFBundlePackageType</key><string>APPL</string>
@@ -13,5 +13,5 @@
 <key>LSMinimumSystemVersion</key><string>26.0</string>
 <key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>
-<key>NSHumanReadableCopyright</key><string>Copyright © 2026 Geet</string>
+<key>NSHumanReadableCopyright</key><string>Copyright © 2026 geet</string>
 </dict></plist>

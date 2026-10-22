@@ -1,0 +1,19 @@
+{
+  "checks": {
+    "all_logo_svg_are_text_free_vector_paths": true,
+    "pngs_decode_and_have_expected_transparency": true,
+    "icns_round_trip_all_ten_iconset_files": true,
+    "application_icon_inputs_match_exports": true,
+    "visual_review": "Inspected large light and reversed marks, app icon, actual-size small PNGs, and menu-bar samples on light and dark backgrounds.",
+    "menu_bar_template_bundled": true,
+    "debug_build_and_codesign_verification": "passed",
+    "relaunched_app": "Rebuilt build/Geet.app launched through LaunchServices with --show; running Geet process 90618 confirmed.",
+    "accessibility": "Native geet-status-item is enabled and labeled Geet in the relaunched app.",
+    "newsreader_typography": "Newsreader Regular 400 is bundled with its OFL license for editorial headings; controls and playlist rows retain system fonts.",
+    "logo_and_icon_files_unchanged_after_typography_selection": true,
+    "newsreader_debug_build_and_codesign_verification": "passed",
+    "lowercase_app_name": "geet in interface copy, menus, accessible labels, CFBundleName, and CFBundleDisplayName. Debug build passed; internal executable and library paths preserved.",
+    "main_header_has_no_app_name": "Main library, Discover, and detail headers show no app-name text; search, add, and settings controls remain. Settings and support retain descriptive titles."
+  },
+  "limits": "The new vector logo is integrated as an 18-point macOS template image. Small-size artwork was visually reviewed in the asset preview; the live status item was verified through Accessibility without a screenshot. The popover closes normally when it loses focus."
+}

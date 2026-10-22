@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export text-free Geet assets from the selected Listener vector master.
+"""Export text-free geet assets from the selected Listener vector master.
 
 Requires Python 3, librsvg (rsvg-convert), ImageMagick, and macOS iconutil.
 Run from any directory. The generated SVGs contain filled paths, never fonts
@@ -21,7 +21,7 @@ ET.register_namespace('', NS)
 
 
 def run(*args):
-    subprocess.run([str(a) for a in args], check=True, capture_output=True)
+    subprocess.run([str(a) for a in args], check=True)
 
 
 tree = ET.parse(ROOT / 'source/listener-traced.svg').getroot()
@@ -38,7 +38,7 @@ def mark(x, y, width, height, color):
     return f'<g fill="{color}" transform="translate({tx:.6f} {ty:.6f}) scale({scale:.9f})">{PATHS}</g>'
 
 
-def svg(width, height, body, title='Geet Listener symbol'):
+def svg(width, height, body, title='geet Listener symbol'):
     return (f'<svg xmlns="{NS}" width="{width}" height="{height}" '
             f'viewBox="0 0 {width} {height}" role="img" aria-label="{title}">'
             f'<title>{title}</title>{body}</svg>\n')
@@ -74,13 +74,13 @@ shadow = ('<defs><filter id="shadow" x="-20%" y="-20%" width="140%" height="145%
           'color-interpolation-filters="sRGB"><feDropShadow dx="0" dy="12" '
           'stdDeviation="15" flood-color="#111A14" flood-opacity="0.16"/></filter></defs>')
 tile = f'<rect x="100" y="100" width="824" height="824" rx="184" fill="{IVORY}" filter="url(#shadow)"/>'
-icon = write('geet-app-icon', svg(1024, 1024, shadow + tile + mark(202, 212, 620, 600, FOREST), 'Geet app icon'))
+icon = write('geet-app-icon', svg(1024, 1024, shadow + tile + mark(202, 212, 620, 600, FOREST), 'geet app icon'))
 render(icon, ROOT / 'png/geet-app-icon-1024.png', 1024)
 render(icon, ROOT / 'png/geet-app-icon-2048.png', 2048)
 
 # Full-bleed source for contexts that apply their own icon mask.
 flat = write('geet-app-icon-unmasked', svg(1024, 1024,
-    f'<rect width="1024" height="1024" fill="{IVORY}"/>' + mark(152, 162, 720, 700, FOREST), 'Geet app icon, unmasked'))
+    f'<rect width="1024" height="1024" fill="{IVORY}"/>' + mark(152, 162, 720, 700, FOREST), 'geet app icon, unmasked'))
 render(flat, ROOT / 'png/geet-app-icon-unmasked-1024.png', 1024)
 
 # A true alpha template: macOS supplies foreground color in light and dark modes.
@@ -98,6 +98,9 @@ run('iconutil', '-c', 'icns', iconset, '-o', ROOT / 'macos/Geet.icns')
 # Keep the existing application build inputs in sync with the asset package.
 shutil.copy2(ROOT / 'png/geet-app-icon-1024.png', REPO / 'Design/Assets/app-icon.png')
 shutil.copy2(ROOT / 'macos/Geet.icns', REPO / 'Sources/Geet/Resources/Geet.icns')
+shutil.copy2(ROOT / 'macos/geet-menu-bar-template.pdf', REPO / 'Sources/Geet/Resources/GeetMenuBar.pdf')
+shutil.copy2(ROOT / 'typography/Newsreader.ttf', REPO / 'Sources/Geet/Resources/Newsreader.ttf')
+shutil.copy2(ROOT / 'typography/OFL.txt', REPO / 'Sources/Geet/Resources/Newsreader-OFL.txt')
 
 # Actual exported assets, reused at native dimensions for visual inspection.
 preview_body = (
@@ -120,11 +123,12 @@ for x, bg, fg in ((850, IVORY, '#000000'), (1100, '#20211C', '#FFFFFF')):
     preview_body += f'<rect x="{x}" y="630" width="180" height="110" rx="14" fill="{bg}"/>'
     preview_body += mark(x + 45, 668, 18, 18, fg) + mark(x + 92, 666, 22, 22, fg)
 preview = ROOT / 'preview.svg'
-preview.write_text(svg(1440, 840, preview_body, 'Geet Listener asset preview'))
+preview.write_text(svg(1440, 840, preview_body, 'geet Listener asset preview'))
 run('rsvg-convert', '--output', ROOT / 'preview.png', preview)
 
 manifest = {
-    'brand': 'Geet', 'direction': 'Listener', 'text_in_logo': False,
+    'brand': 'geet', 'direction': 'Listener', 'text_in_logo': False,
+    'typography': json.loads((ROOT / 'typography/tokens.json').read_text()),
     'palette': {'ink': INK, 'ivory': IVORY, 'forest': FOREST, 'amber': AMBER},
     'source': 'Built-in ImageGen refinement of approved 04-listener.png; symbol only, traced to filled vector paths with Potrace 1.16.',
     'svg': 'Actual filled vector paths, with no fonts or embedded raster artwork.',
