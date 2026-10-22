@@ -20,7 +20,7 @@ zsh scripts/build.sh
 open build/Geet.app
 ```
 
-The bootstrap downloads upstream yt-dlp and Deno releases, verifies their published SHA-256 digests, and records their versions in `scripts/tools-lock.json`. Helpers are bundled when building; the app never installs or updates them at launch. Without bundled helpers, a local yt-dlp installation is supported, including Homebrew’s `/opt/homebrew/bin` and `/usr/local/bin` locations. Deno handles YouTube’s JavaScript challenges. No Homebrew installation is needed for the prepared app.
+The bootstrap downloads upstream yt-dlp and Deno releases, verifies their published SHA-256 digests, and records their versions in `scripts/tools-lock.json`. Helpers are bundled when building; the app never installs or updates them at launch. An installed yt-dlp is preferred, including Homebrew’s `/opt/homebrew/bin` and `/usr/local/bin` locations, because the bundled standalone launcher can take substantially longer to start. If extraction with the installed copy fails, geet retries with its bundled helper. `GEET_YTDLP` can select an explicit executable. Deno handles YouTube’s JavaScript challenges. No Homebrew installation is needed for the prepared app.
 
 ```sh
 zsh scripts/build.sh release
@@ -64,6 +64,8 @@ zsh scripts/test.sh
 ```
 
 The unit tests cover link normalization, queue history and repeat, duplicate entries, bounded metadata, resolver serialization and preemption, shared resolves, dependency cache reuse, failure cooldowns, disk-cache integrity, shared-download cancellation, memory-only streaming, DASH fragment indexing, initialization headers, HTTP byte ranges, and customer-facing error messages that keep provider and system diagnostics out of the primary alert.
+
+Playback startup behavior and the optional benchmark are documented in [playback startup](scripts/testing/playback-startup.md).
 
 Debug-only runtime checks use isolated data, muted playback, real public YouTube content, and the actual native player:
 

@@ -136,7 +136,7 @@ private func script(_ directory: URL, body: String) throws -> URL {
     @Test func concurrentRequestsForOneStreamShareOneResolve() async throws {
         let root = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: root) }
         let tools = root.appendingPathComponent("tools"); try FileManager.default.createDirectory(at: tools, withIntermediateDirectories: true)
-        let helper = try script(root, body: "if [ \"$2\" = --version ]; then echo 2026.10; else sleep 0.1; echo '{\"id\":\"xyEpFjZ_uiE\",\"title\":\"One\",\"url\":\"https://example.com/audio\",\"protocol\":\"https\"}'; fi")
+        let helper = try script(root, body: "if [ \"$2\" = --version ]; then echo 2026.10; else printf '%s\\n' \"$@\" > '\(root.path)/arguments'; sleep 0.1; echo '{\"id\":\"xyEpFjZ_uiE\",\"title\":\"One\",\"url\":\"https://example.com/audio\",\"protocol\":\"https\"}'; fi")
         try FileManager.default.copyItem(at: helper, to: tools.appendingPathComponent("yt-dlp"))
         let runner = ProcessRunner(), track = Track(id: "xyEpFjZ_uiE", title: "One")
         let resolver = Resolver(root: root, bundledTools: tools, runner: runner)
@@ -144,12 +144,90 @@ private func script(_ directory: URL, body: String) throws -> URL {
         async let second = resolver.resolve(track)
         let values = try await (first, second)
         #expect(values.0.url == values.1.url); #expect(await runner.starts == 2)
+        let arguments = try String(contentsOf: root.appendingPathComponent("arguments"), encoding: .utf8)
+        #expect(arguments.contains("--cache-dir\n" + root.appendingPathComponent("ExtractorCache").path))
+        #expect(!arguments.contains("--no-cache-dir"))
         // Simulate another launch with a valid, unchanged persisted dependency.
         let nextRunner = ProcessRunner()
         let next = Resolver(root: root, bundledTools: tools, runner: nextRunner)
         _ = try await next.importCollection(YouTubeLink("https://youtu.be/xyEpFjZ_uiE"))
         #expect(await nextRunner.starts == 1)
         #expect(await next.dependencyStatus()?.version == "2026.10")
+    }
+    @Test func singleVideoImportReusesAudioButPlaylistImportStaysFlat() async throws {
+        let root = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: root) }
+        let tools = root.appendingPathComponent("tools"); try FileManager.default.createDirectory(at: tools, withIntermediateDirectories: true)
+        let helper = try script(root, body: "if [ \"$2\" = --version ]; then echo 2026.10; else printf '%s\\n' \"$@\" > '\(root.path)/arguments'; echo '{\"id\":\"xyEpFjZ_uiE\",\"title\":\"One\",\"url\":\"https://example.com/audio\",\"format_id\":\"140\",\"protocol\":\"https\"}'; fi")
+        try FileManager.default.copyItem(at: helper, to: tools.appendingPathComponent("yt-dlp"))
+        let runner = ProcessRunner(), resolver = Resolver(root: root, bundledTools: tools)
+        let collection = try await resolver.importCollection(YouTubeLink("https://youtu.be/xyEpFjZ_uiE"))
+        let starts = await resolver.runner.starts
+        let stream = try await resolver.resolve(collection.tracks[0])
+        #expect(stream.formatID == "140")
+        #expect(await resolver.runner.starts == starts)
+        let videoArguments = try String(contentsOf: root.appendingPathComponent("arguments"), encoding: .utf8)
+        #expect(videoArguments.contains("--ignore-no-formats-error"))
+        #expect(!videoArguments.contains("--flat-playlist"))
+        let playlistResolver = Resolver(root: root.appendingPathComponent("playlist"), bundledTools: tools, runner: runner)
+        _ = try await playlistResolver.importCollection(YouTubeLink("https://youtube.com/playlist?list=PL_test"))
+        let playlistArguments = try String(contentsOf: root.appendingPathComponent("arguments"), encoding: .utf8)
+        #expect(playlistArguments.contains("--flat-playlist"))
+        #expect(!playlistArguments.contains("--ignore-no-formats-error"))
+        #expect(await playlistResolver.cached("xyEpFjZ_uiE") == nil)
+    }
+    @Test func metadataOnlySingleVideoCanStillBeImported() async throws {
+        let root = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: root) }
+        let tools = root.appendingPathComponent("tools"); try FileManager.default.createDirectory(at: tools, withIntermediateDirectories: true)
+        let helper = try script(root, body: "if [ \"$2\" = --version ]; then echo 2026.10; else echo '{\"id\":\"xyEpFjZ_uiE\",\"title\":\"One\"}'; fi")
+        try FileManager.default.copyItem(at: helper, to: tools.appendingPathComponent("yt-dlp"))
+        let resolver = Resolver(root: root, bundledTools: tools)
+        let collection = try await resolver.importCollection(YouTubeLink("https://youtu.be/xyEpFjZ_uiE"))
+        #expect(collection.tracks.first?.title == "One")
+        #expect(await resolver.cached("xyEpFjZ_uiE") == nil)
+    }
+    @Test func preferredToolReplacesPersistedBundledProbe() async throws {
+        let root = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: root) }
+        let tools = root.appendingPathComponent("tools"); try FileManager.default.createDirectory(at: tools, withIntermediateDirectories: true)
+        let helper = try script(root, body: "if [ \"$2\" = --version ]; then echo 2026.10; else echo '{\"id\":\"xyEpFjZ_uiE\",\"title\":\"One\",\"url\":\"https://example.com/audio\"}'; fi")
+        let bundled = tools.appendingPathComponent("yt-dlp")
+        try FileManager.default.copyItem(at: helper, to: bundled)
+        let track = Track(id: "xyEpFjZ_uiE", title: "One")
+        let initial = Resolver(root: root, bundledTools: tools)
+        _ = try await initial.resolve(track)
+        #expect(await initial.dependencyStatus()?.path == bundled.path)
+        let preferred = Resolver(root: root, bundledTools: tools, preferredTools: [helper])
+        _ = try await preferred.resolve(track, fresh: true)
+        #expect(await preferred.dependencyStatus()?.path == helper.path)
+        #expect(await preferred.runner.starts == 2)
+    }
+    @Test func outdatedPreferredToolFallsBackToBundledExtraction() async throws {
+        let root = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: root) }
+        let tools = root.appendingPathComponent("tools"); try FileManager.default.createDirectory(at: tools, withIntermediateDirectories: true)
+        let helper = try script(root, body: "echo '{\"id\":\"xyEpFjZ_uiE\",\"title\":\"One\",\"url\":\"https://example.com/audio\"}'")
+        try FileManager.default.copyItem(at: helper, to: tools.appendingPathComponent("yt-dlp"))
+        let outdated = try script(root, body: "if [ \"$2\" = --version ]; then echo 2026.01; else echo 'ERROR: unsupported' >&2; exit 1; fi")
+        let resolver = Resolver(root: root, bundledTools: tools, preferredTools: [outdated])
+        let stream = try await resolver.resolve(Track(id: "xyEpFjZ_uiE", title: "One"))
+        #expect(stream.url.absoluteString == "https://example.com/audio")
+        #expect(await resolver.runner.starts == 3)
+    }
+    @Test func cancelledPreferredExtractionDoesNotLaunchFallback() async throws {
+        let root = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: root) }
+        let tools = root.appendingPathComponent("tools"); try FileManager.default.createDirectory(at: tools, withIntermediateDirectories: true)
+        let helper = try script(root, body: "echo unexpected")
+        try FileManager.default.copyItem(at: helper, to: tools.appendingPathComponent("yt-dlp"))
+        let slow = try script(root, body: "if [ \"$2\" = --version ]; then echo 2026.10; else sleep 0.3; echo '{}'; fi")
+        let resolver = Resolver(root: root, bundledTools: tools, preferredTools: [slow])
+        let operation = Task { try await resolver.resolve(Track(id: "xyEpFjZ_uiE", title: "One")) }
+        let deadline = Date().addingTimeInterval(5)
+        while await resolver.runner.starts < 2 {
+            guard Date() < deadline else { throw GeetError.message("Extractor did not start") }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        operation.cancel()
+        do { _ = try await operation.value; Issue.record("Expected cancellation") }
+        catch { #expect(error is CancellationError) }
+        #expect(await resolver.runner.starts == 2)
     }
     @Test func startupDoesNotSpawnAnything() async throws {
         let root = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: root) }

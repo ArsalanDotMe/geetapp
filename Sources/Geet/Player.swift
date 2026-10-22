@@ -45,7 +45,8 @@ final class Player: ObservableObject {
     private var server: AudioStreamServer?
     var usesOfflineAudio: Bool { server?.offline == true }
     private var resolveTask: Task<Void, Never>?
-    private var lookAhead: Task<Void, Never>?
+    private var lookAhead: Task<ResolvedStream?, Never>?
+    private var lookAheadTrackID: String?
     private var idleTimer: DispatchSourceTimer?
     private var generation = UUID()
     private var recovery = RecoveryBudget()
@@ -177,7 +178,12 @@ final class Player: ObservableObject {
 
     private func load(_ track: Track, at offset: Double, recoveryAttempt: Bool = false) {
         if enablesMediaCommands && commands.isEmpty { installMediaCommands() }
-        resolveTask?.cancel(); lookAhead?.cancel(); cancelIdleDeadline()
+        resolveTask?.cancel(); cancelIdleDeadline()
+        // Keep a matching look-ahead alive when Next arrives during extraction.
+        // Cancelling it here would throw away its network work and start over.
+        let prepared = !recoveryAttempt && lookAheadTrackID == track.id ? lookAhead : nil
+        if prepared == nil { lookAhead?.cancel() }
+        lookAhead = nil; lookAheadTrackID = nil
         tearDownPipeline()
         let token = UUID(); generation = token
         self.track = track; nowPlayingArtwork = nil; position = max(0, offset); duration = track.duration ?? 0
@@ -186,13 +192,20 @@ final class Player: ObservableObject {
         resolveTask = Task { [weak self] in
             guard let self else { return }
             do {
-                await resolver.cancelBackground()
+                if prepared == nil { await resolver.cancelBackground() }
                 let item: AVPlayerItem
                 if offlineEnabled, let saved = await cache.completedEntry(for: track.id) {
+                    prepared?.cancel()
                     let resource = AudioStreamServer(cache: cache, key: saved.key, stream: nil)
                     server = resource; item = AVPlayerItem(url: try await resource.start())
                 } else {
-                    let stream = try await resolver.resolve(track, fresh: recoveryAttempt)
+                    let prefetched = await withTaskCancellationHandler(operation: {
+                        await prepared?.value
+                    }, onCancel: { prepared?.cancel() })
+                    try Task.checkCancellation()
+                    let stream: ResolvedStream
+                    if let prefetched, prefetched.isValid { stream = prefetched }
+                    else { stream = try await resolver.resolve(track, fresh: recoveryAttempt) }
                     try Task.checkCancellation()
                     guard generation == token else { return }
                     self.track = stream.track; duration = stream.track.duration ?? duration
@@ -208,7 +221,9 @@ final class Player: ObservableObject {
                 try Task.checkCancellation(); guard generation == token else { return }
                 let player = AVPlayer(playerItem: item)
                 player.volume = volume; player.automaticallyWaitsToMinimizeStalling = true
-                item.preferredForwardBufferDuration = track.isLive ? 10 : 20
+                // Keep native stall protection, but avoid asking for twenty seconds
+                // of audio before a recorded track has even started.
+                item.preferredForwardBufferDuration = self.track?.isLive == true ? 10 : 5
                 media = player
                 observe(item, player: player)
                 if position > 0 && self.track?.isLive != true {
@@ -269,7 +284,17 @@ final class Player: ObservableObject {
         guard isPlaying, let index = queue.peekNext(repeatMode: repeatMode), let collection,
               collection.tracks.indices.contains(index), collection.tracks[index].id != track?.id else { return }
         let next = collection.tracks[index]
-        lookAhead = Task { [resolver] in _ = try? await resolver.resolve(next, priority: .background) }
+        lookAheadTrackID = next.id
+        lookAhead = Task { [resolver, cache] in
+            guard let stream = try? await resolver.resolve(next, priority: .background), !Task.isCancelled else { return nil }
+            if !stream.isHLS && !stream.track.isLive {
+                // Warm one bounded chunk in memory. Speculative listening must
+                // never save audio to disk or turn into a whole-track download.
+                let key = MediaCache.key(trackID: next.id, formatID: stream.formatID)
+                _ = try? await cache.chunk(key: key, index: 0, stream: stream, retaining: false)
+            }
+            return Task.isCancelled ? nil : stream
+        }
     }
     private func startProgressObserver() {
         guard visible, periodic == nil, let media, isPlaying else { return }

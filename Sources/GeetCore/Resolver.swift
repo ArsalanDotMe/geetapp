@@ -23,8 +23,13 @@ public actor Resolver {
     private var probeTask: Task<URL, Error>?
     private var pendingStreams: [String: (UUID, ResolvePriority, Task<ResolvedStream, Error>)] = [:]
     private let bundledTools: URL?
-    public init(root: URL = Paths.support, bundledTools: URL? = nil, runner: ProcessRunner = ProcessRunner()) {
-        self.root = root; self.runner = runner; self.bundledTools = bundledTools
+    private let preferredTools: [URL]
+    public static var installedTools: [URL] {
+        ["/opt/homebrew/bin/yt-dlp", "/usr/local/bin/yt-dlp",
+         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin/yt-dlp").path].map { URL(fileURLWithPath: $0) }
+    }
+    public init(root: URL = Paths.support, bundledTools: URL? = nil, runner: ProcessRunner = ProcessRunner(), preferredTools: [URL] = []) {
+        self.root = root; self.runner = runner; self.bundledTools = bundledTools; self.preferredTools = preferredTools
         self.probe = Paths.read(DependencyProbe.self, from: root.appendingPathComponent("dependency.json"))
         let stored = Paths.read([String: ResolvedStream].self, from: root.appendingPathComponent("streams.json")) ?? [:]
         self.streams = stored.filter { $0.value.isValid }.sorted { $0.value.resolvedAt > $1.value.resolvedAt }.prefix(64).reduce(into: [:]) { $0[$1.key] = $1.value }
@@ -39,15 +44,17 @@ public actor Resolver {
     }
 
     private func executable(force: Bool = false, priority: ResolvePriority) async throws -> URL {
-        if !force, let probe, probe.usable() { return URL(fileURLWithPath: probe.path) }
-        if let probeTask { return try await probeTask.value }
-        let candidates = [bundledTools?.appendingPathComponent("yt-dlp").path,
-                          ProcessInfo.processInfo.environment["GEET_YTDLP"],
-                          "/opt/homebrew/bin/yt-dlp", "/usr/local/bin/yt-dlp",
-                          FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin/yt-dlp").path].compactMap { $0 }
+        let candidates = [ProcessInfo.processInfo.environment["GEET_YTDLP"]].compactMap { $0 }
+            + preferredTools.map(\.path)
+            + [bundledTools?.appendingPathComponent("yt-dlp").path].compactMap { $0 }
+            + Self.installedTools.map(\.path)
         guard let path = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
             throw GeetError.message("geet needs yt-dlp to open YouTube links. Install it with ‘brew install yt-dlp deno’, then choose Recheck in Settings.")
         }
+        // Reconsider the preferred path even with a valid persisted probe so
+        // an existing install can leave the expensive bundled one-file launcher.
+        if !force, let probe, probe.path == path, probe.usable() { return URL(fileURLWithPath: probe.path) }
+        if let probeTask { return try await probeTask.value }
         let runner = runner
         let task = Task { () throws -> URL in
             let url = URL(fileURLWithPath: path)
@@ -67,20 +74,33 @@ public actor Resolver {
     private func storeProbe(_ value: DependencyProbe) { probe = value; try? Paths.write(value, to: root.appendingPathComponent("dependency.json")) }
 
     private func baseArguments() -> [String] {
-        var args = ["--ignore-config", "--no-cache-dir", "--no-update", "--no-warnings", "--skip-download", "--socket-timeout", "15", "--retries", "0", "--extractor-retries", "0"]
+        var args = ["--ignore-config", "--cache-dir", root.appendingPathComponent("ExtractorCache", isDirectory: true).path, "--no-update", "--no-warnings", "--skip-download", "--socket-timeout", "15", "--retries", "0", "--extractor-retries", "0"]
         let deno = [bundledTools?.appendingPathComponent("deno").path, "/opt/homebrew/bin/deno", "/usr/local/bin/deno"].compactMap { $0 }.first { FileManager.default.isExecutableFile(atPath: $0) }
         if let deno { args += ["--js-runtimes", "deno:\(deno)"] }
         return args
     }
+
+    // Share selection between imports and playback so a single-video import
+    // can hand its audio URL directly to the player.
+    private static let audioFormat = "bestaudio[ext=m4a]/bestaudio[acodec^=mp4a]/bestaudio[protocol*=m3u8]/worst[protocol*=m3u8][acodec^=mp4a]"
 
     public func importCollection(_ link: YouTubeLink, priority: ResolvePriority = .foreground) async throws -> Collection {
         let failureKey = link.isPlaylist ? "playlist:\(link.id)" : link.id
         try checkFailure(failureKey)
         do {
             let exe = try await executable(priority: priority)
-            let args = baseArguments() + ["--flat-playlist", "--playlist-end", "1000", "--dump-single-json", "--", link.url.absoluteString]
-            let data = try await runner.run(exe, arguments: args, priority: priority)
-            return try Self.parseCollection(data, link: link)
+            let selection = link.isPlaylist
+                ? ["--flat-playlist", "--playlist-end", "1000"]
+                : ["--no-playlist", "-f", Self.audioFormat, "--ignore-no-formats-error"]
+            let args = baseArguments() + selection + ["--dump-single-json", "--", link.url.absoluteString]
+            let data = try await extract(exe, arguments: args, priority: priority)
+            try Task.checkCancellation()
+            let collection = try Self.parseCollection(data, link: link)
+            if !link.isPlaylist, let track = collection.tracks.first,
+               let stream = try? Self.parseStream(data, fallback: track) {
+                storeStream(stream)
+            }
+            return collection
         } catch {
             if !(error is CancellationError) { recordFailure(failureKey) }; throw error
         }
@@ -106,16 +126,31 @@ public actor Resolver {
             let exe = try await executable(priority: priority)
             // HLS live streams may expose muxed renditions only. AVPlayer consumes them
             // without a video layer; prefer the lowest-bandwidth native HLS fallback.
-            let format = "bestaudio[ext=m4a]/bestaudio[acodec^=mp4a]/bestaudio[protocol*=m3u8]/worst[protocol*=m3u8][acodec^=mp4a]"
-            let data = try await runner.run(exe, arguments: baseArguments() + ["--no-playlist", "-f", format, "--dump-single-json", "--", track.url.absoluteString], priority: priority)
+            let data = try await extract(exe, arguments: baseArguments() + ["--no-playlist", "-f", Self.audioFormat, "--dump-single-json", "--", track.url.absoluteString], priority: priority)
             let result = try Self.parseStream(data, fallback: track)
-            streams[track.id] = result
-            if streams.count > 64, let oldest = streams.min(by: { $0.value.resolvedAt < $1.value.resolvedAt })?.key { streams.removeValue(forKey: oldest) }
-            try? Paths.write(streams, to: root.appendingPathComponent("streams.json"))
+            try Task.checkCancellation()
+            storeStream(result)
             return result
         } catch {
             if !(error is CancellationError) { recordFailure(track.id) }; throw error
         }
+    }
+    private func extract(_ executable: URL, arguments: [String], priority: ResolvePriority) async throws -> Data {
+        do { return try await runner.run(executable, arguments: arguments, priority: priority) }
+        catch {
+            try Task.checkCancellation()
+            guard !(error is CancellationError), let bundled = bundledTools?.appendingPathComponent("yt-dlp"),
+                  bundled.standardizedFileURL != executable.standardizedFileURL,
+                  FileManager.default.isExecutableFile(atPath: bundled.path) else { throw error }
+            // A local install can be out of date. Retain the bundled extractor
+            // as a compatibility fallback rather than failing a playable link.
+            return try await runner.run(bundled, arguments: arguments, priority: priority)
+        }
+    }
+    private func storeStream(_ stream: ResolvedStream) {
+        streams[stream.track.id] = stream
+        if streams.count > 64, let oldest = streams.min(by: { $0.value.resolvedAt < $1.value.resolvedAt })?.key { streams.removeValue(forKey: oldest) }
+        try? Paths.write(streams, to: root.appendingPathComponent("streams.json"))
     }
     public func cached(_ id: String) -> ResolvedStream? { streams[id].flatMap { $0.isValid ? $0 : nil } }
     public func cancelBackground() async { await runner.cancelBackground() }
