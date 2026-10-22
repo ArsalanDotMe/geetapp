@@ -23,13 +23,13 @@ public actor Resolver {
     private var probeTask: Task<URL, Error>?
     private var pendingStreams: [String: (UUID, ResolvePriority, Task<ResolvedStream, Error>)] = [:]
     private let bundledTools: URL?
-    private let preferredTools: [URL]
+    private let allowExternalTools: Bool
     public static var installedTools: [URL] {
         ["/opt/homebrew/bin/yt-dlp", "/usr/local/bin/yt-dlp",
          FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin/yt-dlp").path].map { URL(fileURLWithPath: $0) }
     }
-    public init(root: URL = Paths.support, bundledTools: URL? = nil, runner: ProcessRunner = ProcessRunner(), preferredTools: [URL] = []) {
-        self.root = root; self.runner = runner; self.bundledTools = bundledTools; self.preferredTools = preferredTools
+    public init(root: URL = Paths.support, bundledTools: URL? = nil, runner: ProcessRunner = ProcessRunner(), allowExternalTools: Bool = true) {
+        self.root = root; self.runner = runner; self.bundledTools = bundledTools; self.allowExternalTools = allowExternalTools
         self.probe = Paths.read(DependencyProbe.self, from: root.appendingPathComponent("dependency.json"))
         let stored = Paths.read([String: ResolvedStream].self, from: root.appendingPathComponent("streams.json")) ?? [:]
         self.streams = stored.filter { $0.value.isValid }.sorted { $0.value.resolvedAt > $1.value.resolvedAt }.prefix(64).reduce(into: [:]) { $0[$1.key] = $1.value }
@@ -44,15 +44,14 @@ public actor Resolver {
     }
 
     private func executable(force: Bool = false, priority: ResolvePriority) async throws -> URL {
-        let candidates = [ProcessInfo.processInfo.environment["GEET_YTDLP"]].compactMap { $0 }
-            + preferredTools.map(\.path)
-            + [bundledTools?.appendingPathComponent("yt-dlp").path].compactMap { $0 }
-            + Self.installedTools.map(\.path)
+        let candidates = (allowExternalTools ? [ProcessInfo.processInfo.environment["GEET_YTDLP"]].compactMap { $0 } : [])
+            + bundledExecutables.map(\.path)
+            + (allowExternalTools ? Self.installedTools.map(\.path) : [])
         guard let path = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
             throw GeetError.message("geet needs yt-dlp to open YouTube links. Install it with ‘brew install yt-dlp deno’, then choose Recheck in Settings.")
         }
-        // Reconsider the preferred path even with a valid persisted probe so
-        // an existing install can leave the expensive bundled one-file launcher.
+        // Tool preference can change after upgrading an app. Do not let a
+        // persisted external or legacy probe override the unpacked bundle.
         if !force, let probe, probe.path == path, probe.usable() { return URL(fileURLWithPath: probe.path) }
         if let probeTask { return try await probeTask.value }
         let runner = runner
@@ -73,9 +72,17 @@ public actor Resolver {
     }
     private func storeProbe(_ value: DependencyProbe) { probe = value; try? Paths.write(value, to: root.appendingPathComponent("dependency.json")) }
 
+    private var bundledExecutables: [URL] {
+        guard let bundledTools else { return [] }
+        return [bundledTools.appendingPathComponent("yt-dlp/yt-dlp_macos"),
+                bundledTools.appendingPathComponent("yt-dlp")]
+            .filter { FileManager.default.isExecutableFile(atPath: $0.path) && (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }
+    }
+
     private func baseArguments() -> [String] {
         var args = ["--ignore-config", "--cache-dir", root.appendingPathComponent("ExtractorCache", isDirectory: true).path, "--no-update", "--no-warnings", "--skip-download", "--socket-timeout", "15", "--retries", "0", "--extractor-retries", "0"]
-        let deno = [bundledTools?.appendingPathComponent("deno").path, "/opt/homebrew/bin/deno", "/usr/local/bin/deno"].compactMap { $0 }.first { FileManager.default.isExecutableFile(atPath: $0) }
+        let deno = ([bundledTools?.appendingPathComponent("deno").path].compactMap { $0 }
+            + (allowExternalTools ? ["/opt/homebrew/bin/deno", "/usr/local/bin/deno"] : [])).first { FileManager.default.isExecutableFile(atPath: $0) }
         if let deno { args += ["--js-runtimes", "deno:\(deno)"] }
         return args
     }
@@ -139,7 +146,7 @@ public actor Resolver {
         do { return try await runner.run(executable, arguments: arguments, priority: priority) }
         catch {
             try Task.checkCancellation()
-            guard !(error is CancellationError), let bundled = bundledTools?.appendingPathComponent("yt-dlp"),
+            guard !(error is CancellationError), let bundled = bundledExecutables.first,
                   bundled.standardizedFileURL != executable.standardizedFileURL,
                   FileManager.default.isExecutableFile(atPath: bundled.path) else { throw error }
             // A local install can be out of date. Retain the bundled extractor

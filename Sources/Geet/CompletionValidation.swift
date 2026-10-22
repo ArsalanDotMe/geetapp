@@ -204,7 +204,7 @@ enum CompletionValidation {
     static func verifyAudio(tools: URL) async -> Bool {
         let output = URL(fileURLWithPath: ProcessInfo.processInfo.environment["GEET_VALIDATION_DIR"] ?? "/tmp/geet-audio")
         let cache = MediaCache(root: output.appendingPathComponent("Media"))
-        let resolver = Resolver(root: output, bundledTools: tools)
+        let resolver = Resolver(root: output, bundledTools: tools, allowExternalTools: false)
         let player = Player(resolver: resolver, cache: cache, mediaCommands: false)
         player.volume = 0
         var report: [String: String] = [:]
@@ -216,6 +216,12 @@ enum CompletionValidation {
         do {
             let short = try await resolver.importCollection(YouTubeLink("https://www.youtube.com/watch?v=jNQXAC9IVRw"))
             player.play(short); try await ready(player)
+            let probe = await resolver.dependencyStatus()
+            report["extractor_path"] = probe?.path
+            report["extractor_version"] = probe?.version
+            record("uses_unpacked_bundled_extractor", probe?.path == tools.appendingPathComponent("yt-dlp/yt-dlp_macos").path)
+            let deno = try await resolver.runner.run(tools.appendingPathComponent("deno"), arguments: ["--version"])
+            record("bundled_deno_runs_without_homebrew", String(decoding: deno, as: UTF8.self).hasPrefix("deno "))
             record("recorded_native_duration_matches_metadata", abs((player.media?.currentItem?.duration.seconds ?? 0) - (player.track?.duration ?? 0)) < 2)
             var savedPosition = 0.0
             player.onSnapshot = { _, _, position in savedPosition = position }

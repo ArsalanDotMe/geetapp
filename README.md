@@ -20,7 +20,7 @@ zsh scripts/build.sh
 open build/Geet.app
 ```
 
-The bootstrap downloads upstream yt-dlp and Deno releases, verifies their published SHA-256 digests, and records their versions in `scripts/tools-lock.json`. Helpers are bundled when building; the app never installs or updates them at launch. An installed yt-dlp is preferred, including Homebrew’s `/opt/homebrew/bin` and `/usr/local/bin` locations, because the bundled standalone launcher can take substantially longer to start. If extraction with the installed copy fails, geet retries with its bundled helper. `GEET_YTDLP` can select an explicit executable. Deno handles YouTube’s JavaScript challenges. No Homebrew installation is needed for the prepared app.
+The bootstrap downloads the releases pinned in `scripts/tools-lock.json`, verifies their published SHA-256 digests, and installs the complete unpacked yt-dlp runtime plus Deno. Use `python3 scripts/bootstrap-tools.py --update` to select newer releases. The build copies the whole runtime into the app. geet uses its bundled tools by default and does not need Homebrew or a separate Python installation. When no bundle is present, a local yt-dlp installation is supported. `GEET_YTDLP` can select an explicit executable. Deno handles YouTube's JavaScript challenges. Helpers are never installed or updated at app launch.
 
 ```sh
 zsh scripts/build.sh release

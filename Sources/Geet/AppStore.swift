@@ -59,7 +59,7 @@ final class AppStore: ObservableObject {
         library = Paths.read(LibraryDocument.self, from: root.appendingPathComponent("library.json")) ?? LibraryDocument()
         offlineEnabled = false
         #endif
-        resolver = Resolver(root: root, bundledTools: Bundle.main.resourceURL?.appendingPathComponent("Tools"), preferredTools: Resolver.installedTools)
+        resolver = Resolver(root: root, bundledTools: Bundle.main.resourceURL?.appendingPathComponent("Tools"))
         self.discoverImporter = discoverImporter ?? { [resolver] link in try await resolver.importCollection(link) }
         cache = MediaCache(root: root.appendingPathComponent("Media", isDirectory: true))
         player = Player(resolver: resolver, cache: cache)

@@ -19,7 +19,15 @@ if [[ -f Sources/Geet/Resources/Geet.icns ]]; then cp Sources/Geet/Resources/Gee
 if [[ -d Tools ]]; then
   mkdir -p "$destination/Contents/Resources/Tools"
   for tool in yt-dlp deno; do
-    if [[ -x "Tools/$tool" ]]; then cp "Tools/$tool" "$destination/Contents/Resources/Tools/"; fi
+    target="$destination/Contents/Resources/Tools/$tool"
+    if [[ "$tool" == yt-dlp && -d "Tools/$tool" ]]; then
+      [[ -x "Tools/$tool/yt-dlp_macos" && -d "Tools/$tool/_internal" ]] || { echo "Incomplete unpacked yt-dlp bundle" >&2; exit 1; }
+      rm -rf "$target"
+      cp -R "Tools/$tool" "$target"
+    elif [[ -f "Tools/$tool" && -x "Tools/$tool" ]]; then
+      rm -rf "$target"
+      cp "Tools/$tool" "$target"
+    fi
   done
 fi
 codesign --force --deep --sign - "$destination"

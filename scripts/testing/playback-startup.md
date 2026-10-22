@@ -1,80 +1,76 @@
 # Playback startup
 
-Run the offline suite with `zsh scripts/test.sh`. The optional native benchmark
-requires YouTube access and runs muted against two public videos, including a
-long mix. It uses the app's tool selection: installed yt-dlp first, with the
-bundled helper as a fallback. It uses disposable resolver and audio caches and removes them afterward.
+Run `zsh scripts/test.sh` for the offline Swift and bootstrap tests. Build with
+`zsh scripts/build.sh` to copy the complete unpacked yt-dlp runtime and Deno into
+`build/Geet.app`. Bootstrap uses the releases in `scripts/tools-lock.json`;
+`python3 scripts/bootstrap-tools.py --update` explicitly selects newer releases.
+
+The optional native benchmark plays two public videos while muted and uses
+disposable resolver and audio caches. Run it against the actual packaged tools
+with external executable selection disabled and no Homebrew paths:
 
 ```sh
-GEET_BENCHMARK_PLAYBACK=1 \
-CLANG_MODULE_CACHE_PATH="$PWD/.build/ModuleCache" \
-SWIFTPM_MODULECACHE_OVERRIDE="$PWD/.build/ModuleCache" \
-swift test --disable-sandbox --filter PlaybackStartupTests
+env -u GEET_YTDLP -u PYTHONHOME -u PYTHONPATH \
+  PATH=/usr/bin:/bin:/usr/sbin:/sbin \
+  GEET_BENCHMARK_PLAYBACK=1 \
+  GEET_BENCHMARK_TOOLS="$PWD/build/Geet.app/Contents/Resources/Tools" \
+  CLANG_MODULE_CACHE_PATH="$PWD/.build/ModuleCache" \
+  SWIFTPM_MODULECACHE_OVERRIDE="$PWD/.build/ModuleCache" \
+  /usr/bin/swift test --skip-build --disable-sandbox --filter PlaybackStartupTests
 ```
 
-`STARTUP` measures Play to a native playback clock above 0.1 seconds. Attempt 0
-has no resolved URL or audio cache; attempt 1 reuses both. `pipeline_seconds`
-includes extraction, the initial audio chunk, and loopback endpoint setup.
+`STARTUP` measures Play until the native playback clock exceeds 0.1 seconds.
+Attempt 0 has no resolved URL or audio cache; attempt 1 reuses both.
+`pipeline_seconds` includes extraction, the initial chunk, and loopback setup.
+The test asserts that the resolver uses the unpacked executable inside the app
+and separately executes bundled Deno with the same restricted helper PATH.
 
-`IMPORT` measures single-video import through native playback. The
-`duplicate_extraction=true` case deliberately resolves again after importing,
-simulating the previous two-extraction flow. Both cases use the current format
-selection, so this comparison isolates the redundant extraction rather than
-reproducing every detail of the old import implementation.
+`IMPORT` measures single-video import through playback. The
+`duplicate_extraction=true` case deliberately repeats extraction after import,
+simulating the previous flow using the current format selection.
 
-`NEXT` switches while look-ahead extraction is running, then separately after
-both initial chunks are resident. It checks that each queue uses one version
-probe, one extraction, and one range request per track, with no audio saved to
-disk and no growth beyond the existing six-chunk memory bound.
+`NEXT` switches during look-ahead extraction and after the next track's first
+chunk is resident. It checks one version probe and one extraction per queue,
+one audio request per track, no disk retention, and the six-chunk memory bound.
 
-Playback keeps AVPlayer's automatic stall protection enabled. The recorded-track
-forward buffer preference is five seconds; live radio keeps ten seconds. The
-512 KB cache format stays unchanged so existing saved audio remains usable.
-Look-ahead fetches at most one initial chunk for the next recorded track,
-which may be skipped without being played. Pause and track changes cancel it.
+The app's `--validate-audio` debug mode also uses bundled-only resolution. It
+checks long-mix playback progression for 30 seconds, near-end seeking, duration,
+bounded transfers, immediate pause after seeking, and pipeline teardown.
 
-Timing varies with YouTube and network conditions. These checks observe native
-playback while muted; they do not establish speaker audibility or long-duration
-reliability on a slow connection. The existing `--validate-audio` debug app mode
-also checks long-mix progression, seeking, bounded transfers, and pipeline cleanup.
+## Measurements, 22 October 2026
 
-## Local measurements, 22 October 2026
+The final packaged app used yt-dlp 2026.08.19 and Deno 2.9.8 without Homebrew:
 
-Final native startup measurements on this Mac, in seconds:
+| Scenario | Seconds |
+| --- | ---: |
+| Cold short track, including dependency probe | 2.02 |
+| Cold long mix, dependency already checked | 2.12 |
+| Warm replay | 0.32–0.34 |
+| Single-video import through playback | 1.99 |
+| Next during extraction | 1.93 |
+| Next with its initial audio chunk ready | 0.35 |
 
-| Scenario | Bundled tool only | App's installed-tool preference |
-| --- | ---: | ---: |
-| Cold short track, including initial dependency probe | 23.81 | 1.97 |
-| Cold long mix, dependency already checked | 12.20 | 1.91 |
-| Next after its initial chunk is resident | 0.33 | 0.33 |
+The same-version one-file bundle previously measured 23.81 seconds for the
+short track including its dependency probe, and 12.20 seconds for the long mix.
+Repeated `--version` launches took 11.3–11.4 seconds with that packaging;
+the unpacked executable took about 0.35 seconds after its first launch.
+The unpacked executable's first launch in that experiment still took 11.5
+seconds. Cold track measurements do not establish first-ever macOS launch time.
+Network conditions also affect extraction, so these are local samples.
 
-The final installed-tool run measured import-to-play at 2.02 seconds when
-reusing extraction, versus 2.95 seconds with a deliberately redundant extraction.
-An earlier run measured 1.76 versus 4.30 seconds. These samples establish the
-removed process work, but do not establish a fixed speedup under all network
-conditions. Warm replay measured 0.29–0.34 seconds. Next during extraction
-measured 1.72 seconds without restarting the helper or duplicating audio requests.
+The final app passed the 30-second long-mix check with three audio range
+requests, no audio saved to disk, bounded memory, successful near-end seeking,
+correct duration, and pipeline teardown. All 108 packaged Mach-O files were
+inspected for dynamic-library dependencies; none referenced Homebrew or other
+external user-installed libraries. The app passed strict code-sign verification.
 
-The packaged yt-dlp 2026.08.19 took 13.74 seconds in a separate CLI probe,
-including 11.93 seconds before its first debug output. The Homebrew 2026.03.17
-copy resolved the same long mix in 1.38 seconds, with debug output after 0.24
-seconds. This compares the installed tools on this Mac rather than isolating
-release versions. An existing persisted bundled dependency probe no longer
-overrides the installed-tool preference. If extraction with the installed copy
-fails, geet retains its packaged helper as a compatibility fallback.
+AVPlayer still protects against stalls automatically. Recorded tracks request
+a five-second forward buffer, and live radio keeps ten seconds. Existing 512 KB
+offline cache chunks remain unchanged. Look-ahead warms at most one chunk for
+the next recorded track and cancels on pause or a different selection.
 
-With the same Homebrew tool, cold Play before buffer changes measured
-1.96–2.25 seconds. These samples do not establish an improvement from the smaller
-buffer or extractor cache. The clear gains are selecting the faster entry point
-on this Mac and removing duplicate single-video extraction. Extractor caching
-allows reuse where yt-dlp supports it; its effect was not isolated here.
-
-The optimized app's native audio validation also passed: 30 seconds of long-mix
-playback advanced in real time with three range requests, no audio saved to
-disk, bounded memory, successful seeking near the end, correct duration, and
-pipeline teardown. That run used the bundled tools and the optimized audio path.
-
-Raw local evidence is in ignored `build/startup-investigation/`, including
-`selected-tools-native.log`, `bundled-native.log`, and
-`audio-validation/audio-report.json`. Signed stream URLs and other extractor
+Raw local evidence is in ignored `build/unpacked-bundle-validation/`, including
+`startup.log`, `native-audio/audio-report.json`, `linkage.json`, and `tests.log`.
+These tests observe muted native playback rather than speaker audibility or
+long-duration behavior on a slow connection. Signed URLs and other extractor
 details must stay out of committed evidence.

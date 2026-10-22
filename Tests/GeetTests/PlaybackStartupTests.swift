@@ -11,13 +11,16 @@ import GeetCore
     func measureNativeStartup() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("geet-startup-\(UUID())")
         defer { try? FileManager.default.removeItem(at: root) }
-        let tools = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Tools")
-        let resolver = Resolver(root: root, bundledTools: tools, preferredTools: Resolver.installedTools)
+        let tools = ProcessInfo.processInfo.environment["GEET_BENCHMARK_TOOLS"].map { URL(fileURLWithPath: $0) }
+            ?? URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+                .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Tools")
+        let resolver = Resolver(root: root, bundledTools: tools, allowExternalTools: false)
         let cache = MediaCache(root: root.appendingPathComponent("Media"))
         let player = Player(resolver: resolver, cache: cache, mediaCommands: false)
         player.volume = 0
         defer { player.shutdown() }
+        let denoVersion = try await resolver.runner.run(tools.appendingPathComponent("deno"), arguments: ["--version"])
+        #expect(String(decoding: denoVersion, as: UTF8.self).hasPrefix("deno "))
         let ids = ["jNQXAC9IVRw", "4fWLbK1b88M"]
         for id in ids {
             let track = Track(id: id, title: "Startup measurement")
@@ -34,6 +37,9 @@ import GeetCore
                 }
                 print("STARTUP id=\(id) attempt=\(attempt) pipeline_seconds=\(pipelineSeconds ?? -1) playing_seconds=\(Date().timeIntervalSince(began)) requests=\(await cache.networkRequests)")
                 #expect(player.media?.timeControlStatus == .playing)
+                let probe = try #require(await resolver.dependencyStatus())
+                #expect(probe.path == tools.appendingPathComponent("yt-dlp/yt-dlp_macos").path)
+                print("BUNDLED_EXTRACTOR path=\(probe.path) version=\(probe.version)")
                 player.stop()
             }
         }
@@ -41,7 +47,7 @@ import GeetCore
         // single-video Discover playback previously required.
         for duplicateExtraction in [true, false] {
             let importRoot = root.appendingPathComponent(duplicateExtraction ? "duplicate-import" : "shared-import")
-            let importResolver = Resolver(root: importRoot, bundledTools: tools, preferredTools: Resolver.installedTools)
+            let importResolver = Resolver(root: importRoot, bundledTools: tools, allowExternalTools: false)
             let importCache = MediaCache(root: importRoot.appendingPathComponent("Media"))
             let importPlayer = Player(resolver: importResolver, cache: importCache, mediaCommands: false)
             importPlayer.volume = 0
@@ -63,7 +69,7 @@ import GeetCore
             let queueRoot = root.appendingPathComponent(warmAudio ? "warm-next" : "early-next")
             let first = try #require(await resolver.cached(ids[0]))
             try Paths.write([ids[0]: first], to: queueRoot.appendingPathComponent("streams.json"))
-            let queueResolver = Resolver(root: queueRoot, bundledTools: tools, preferredTools: Resolver.installedTools)
+            let queueResolver = Resolver(root: queueRoot, bundledTools: tools, allowExternalTools: false)
             let queueCache = MediaCache(root: queueRoot.appendingPathComponent("Media"))
             let queuePlayer = Player(resolver: queueResolver, cache: queueCache, mediaCommands: false)
             queuePlayer.volume = 0

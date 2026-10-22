@@ -89,7 +89,7 @@ private final class ProcessOperation: @unchecked Sendable {
         process.qualityOfService = priority == .background ? .utility : .userInitiated
         process.standardOutput = output; process.standardError = error
         var environment = ProcessInfo.processInfo.environment
-        environment["PATH"] = "\(executable.deletingLastPathComponent().path):/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+        environment["PATH"] = "\(executable.deletingLastPathComponent().path):/usr/bin:/bin:/usr/sbin:/sbin"
         process.environment = environment
         let exit = ProcessExit()
         process.terminationHandler = { _ in Task { await exit.finish() } }

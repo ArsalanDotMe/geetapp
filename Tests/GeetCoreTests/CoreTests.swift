@@ -185,49 +185,47 @@ private func script(_ directory: URL, body: String) throws -> URL {
         #expect(collection.tracks.first?.title == "One")
         #expect(await resolver.cached("xyEpFjZ_uiE") == nil)
     }
-    @Test func preferredToolReplacesPersistedBundledProbe() async throws {
+    @Test(arguments: [false, true])
+    func unpackedBundleReplacesPersistedProbe(external: Bool) async throws {
         let root = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: root) }
         let tools = root.appendingPathComponent("tools"); try FileManager.default.createDirectory(at: tools, withIntermediateDirectories: true)
         let helper = try script(root, body: "if [ \"$2\" = --version ]; then echo 2026.10; else echo '{\"id\":\"xyEpFjZ_uiE\",\"title\":\"One\",\"url\":\"https://example.com/audio\"}'; fi")
-        let bundled = tools.appendingPathComponent("yt-dlp")
-        try FileManager.default.copyItem(at: helper, to: bundled)
+        let legacy = tools.appendingPathComponent("yt-dlp")
+        try FileManager.default.copyItem(at: helper, to: legacy)
         let track = Track(id: "xyEpFjZ_uiE", title: "One")
-        let initial = Resolver(root: root, bundledTools: tools)
+        let initial = Resolver(root: root, bundledTools: tools, allowExternalTools: false)
         _ = try await initial.resolve(track)
-        #expect(await initial.dependencyStatus()?.path == bundled.path)
-        let preferred = Resolver(root: root, bundledTools: tools, preferredTools: [helper])
-        _ = try await preferred.resolve(track, fresh: true)
-        #expect(await preferred.dependencyStatus()?.path == helper.path)
-        #expect(await preferred.runner.starts == 2)
-    }
-    @Test func outdatedPreferredToolFallsBackToBundledExtraction() async throws {
-        let root = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: root) }
-        let tools = root.appendingPathComponent("tools"); try FileManager.default.createDirectory(at: tools, withIntermediateDirectories: true)
-        let helper = try script(root, body: "echo '{\"id\":\"xyEpFjZ_uiE\",\"title\":\"One\",\"url\":\"https://example.com/audio\"}'")
-        try FileManager.default.copyItem(at: helper, to: tools.appendingPathComponent("yt-dlp"))
-        let outdated = try script(root, body: "if [ \"$2\" = --version ]; then echo 2026.01; else echo 'ERROR: unsupported' >&2; exit 1; fi")
-        let resolver = Resolver(root: root, bundledTools: tools, preferredTools: [outdated])
-        let stream = try await resolver.resolve(Track(id: "xyEpFjZ_uiE", title: "One"))
-        #expect(stream.url.absoluteString == "https://example.com/audio")
-        #expect(await resolver.runner.starts == 3)
-    }
-    @Test func cancelledPreferredExtractionDoesNotLaunchFallback() async throws {
-        let root = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: root) }
-        let tools = root.appendingPathComponent("tools"); try FileManager.default.createDirectory(at: tools, withIntermediateDirectories: true)
-        let helper = try script(root, body: "echo unexpected")
-        try FileManager.default.copyItem(at: helper, to: tools.appendingPathComponent("yt-dlp"))
-        let slow = try script(root, body: "if [ \"$2\" = --version ]; then echo 2026.10; else sleep 0.3; echo '{}'; fi")
-        let resolver = Resolver(root: root, bundledTools: tools, preferredTools: [slow])
-        let operation = Task { try await resolver.resolve(Track(id: "xyEpFjZ_uiE", title: "One")) }
-        let deadline = Date().addingTimeInterval(5)
-        while await resolver.runner.starts < 2 {
-            guard Date() < deadline else { throw GeetError.message("Extractor did not start") }
-            try await Task.sleep(for: .milliseconds(10))
+        #expect(await initial.dependencyStatus()?.path == legacy.path)
+        if external {
+            var probe = try #require(await initial.dependencyStatus())
+            let attrs = try FileManager.default.attributesOfItem(atPath: helper.path)
+            probe.path = helper.path
+            probe.modified = attrs[.modificationDate] as! Date
+            probe.size = (attrs[.size] as! NSNumber).uint64Value
+            try Paths.write(probe, to: root.appendingPathComponent("dependency.json"))
         }
-        operation.cancel()
-        do { _ = try await operation.value; Issue.record("Expected cancellation") }
-        catch { #expect(error is CancellationError) }
-        #expect(await resolver.runner.starts == 2)
+        try FileManager.default.removeItem(at: legacy)
+        try FileManager.default.createDirectory(at: legacy, withIntermediateDirectories: true)
+        let unpacked = legacy.appendingPathComponent("yt-dlp_macos")
+        try FileManager.default.copyItem(at: helper, to: unpacked)
+        let upgraded = Resolver(root: root, bundledTools: tools)
+        _ = try await upgraded.resolve(track, fresh: true)
+        #expect(await upgraded.dependencyStatus()?.path == unpacked.path)
+        #expect(await upgraded.runner.starts == 2)
+    }
+    @Test func bundledOnlyRejectsMissingBundleWithoutLaunchingInstalledTools() async throws {
+        let root = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: root) }
+        let resolver = Resolver(root: root, bundledTools: root.appendingPathComponent("missing"), allowExternalTools: false)
+        do { _ = try await resolver.recheck(); Issue.record("Missing bundled tools must fail") }
+        catch { #expect(error is GeetError) }
+        #expect(await resolver.runner.starts == 0)
+    }
+    @Test func helperPathDoesNotIncludeHomebrew() async throws {
+        let root = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: root) }
+        let helper = try script(root, body: "printf '%s' \"$PATH\"")
+        let data = try await ProcessRunner().run(helper, arguments: [])
+        let path = String(decoding: data, as: UTF8.self)
+        #expect(path == root.path + ":/usr/bin:/bin:/usr/sbin:/sbin")
     }
     @Test func startupDoesNotSpawnAnything() async throws {
         let root = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at: root) }
