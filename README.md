@@ -1,6 +1,6 @@
 # geet
 
-A native macOS 26 menu bar player for collecting YouTube playlists, long mixes, and live radio. SwiftUI and AppKit provide the interface, `AVPlayer` plays audio, and yt-dlp resolves links behind the scenes. No browser player, account, analytics, or web UI is embedded in the app.
+A native macOS 26 menu bar player for collecting YouTube playlists, mixes, and live radio. 
 
 ## Run
 
@@ -57,32 +57,8 @@ The app prefers native AAC audio and audio-only HLS. For older extractors that e
 
 For indexed DASH AAC, geet maps the existing fragment index to a small, immutable HLS playlist on a private loopback endpoint. Encoded audio is unchanged. This gives AVPlayer accurate duration and direct seeking without scanning or downloading an entire long mix. The listener binds only to `127.0.0.1`, uses a random path, accepts at most four connections, and is released with the player. Free streaming keeps chunks in bounded memory; disk retention requires the offline entitlement and an explicit cache or download choice.
 
-## Validation
-
-```sh
-zsh scripts/test.sh
-```
-
-The unit tests cover link normalization, queue history and repeat, duplicate entries, bounded metadata, resolver serialization and preemption, shared resolves, dependency cache reuse, failure cooldowns, disk-cache integrity, shared-download cancellation, memory-only streaming, DASH fragment indexing, initialization headers, HTTP byte ranges, and customer-facing error messages that keep provider and system diagnostics out of the primary alert.
-
-Playback startup behavior and the optional benchmark are documented in [playback startup](scripts/testing/playback-startup.md).
-
-Debug-only runtime checks use isolated data, muted playback, real public YouTube content, and the actual native player:
-
-```sh
-GEET_VALIDATION_DIR="$PWD/build/runtime-validation" \
-GEET_DATA_DIR="$PWD/build/runtime-app-data" \
-build/Geet.app/Contents/MacOS/Geet --validate-runtime
-```
-
-Additional debug checks are `--validate-library`, `--validate-audio`, and `--verify-deep-idle`. Use a fresh isolated `GEET_DATA_DIR` and `GEET_VALIDATION_DIR` for each run. Library acceptance starts empty and exercises real store actions, all four Discover choices, offline playback, persistence, refresh, and cancellation. Supply an unlisted playlist through `GEET_UNLISTED_URL`; it is excluded from the shareable report and captures. The audio check measures a two-hour mix, verifies duration and playback speed, then seeks near its end without downloading intervening audio.
-
-The paused deadline was also exercised over the actual 600 seconds, with no additional helpers and a successful warm resume. The short runtime suite injects a 0.25-second deadline for repeatable teardown checks. Offline playback is checked with unchanged outbound request and helper counters. Native Accessibility testing covers actual clicks and keyboard input. The owner separately confirmed audible playback, hardware Play/Pause and Next, and menu-bar panel close/reopen. These checks do not substitute for a long-running battery measurement.
-
-The selected [Mist & Slate palette](Design/References/mist-and-slate.png) supports light and dark appearance, native Liquid Glass controls, and continuous artwork fades. The [original composition](Design/References/option-2-cover-stories.png) is also retained. The [refinement review](design-qa.md) records the current comparison and acceptance checks. The [completion review](Design/Validation/Completion/README.md) contains fresh native captures, the independent design critique, runtime evidence, and acceptance limits. [Initial validation](Design/Validation/README.md) is retained as historical evidence. `--design-preview` uses a separate, in-memory fixture library solely for design review; no sample playlists are inserted into the real library. It and the runtime/interaction harnesses are excluded from release builds.
-
 ## Privacy and dependencies
 
 Library data and local caches live in `~/Library/Application Support/Geet`. Cloudflare receives requests for the public Discover feed. YouTube and its media/image hosts receive requests needed for the links you use. Clipboard links are only read when opening the panel. No browser cookies, credentials, or private accounts are imported.
 
-yt-dlp and Deno are third-party dependencies. Their upstream licenses and redistribution requirements apply, including the components packaged in the yt-dlp binary. See [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [Deno](https://github.com/denoland/deno). This project does not claim YouTube API approval.
+yt-dlp and Deno are third-party dependencies. Their upstream licenses and redistribution requirements apply, including the components packaged in the yt-dlp binary. See [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [Deno](https://github.com/denoland/deno). 
