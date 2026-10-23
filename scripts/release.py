@@ -37,6 +37,39 @@ def macho_files(app):
                     yield path
 
 
+def normalize_frameworks(app):
+    # The upstream ZIP materializes framework symlinks as duplicate files.
+    # Restore Apple's versioned layout before signing, preserving all bytes.
+    for framework in app.rglob("*.framework"):
+        versions = framework / "Versions"
+        if not versions.is_dir():
+            continue
+        actual = [p for p in versions.iterdir() if p.name != "Current" and p.is_dir()]
+        if len(actual) != 1:
+            raise RuntimeError(f"Expected one framework version: {framework}")
+        version = actual[0]
+        for duplicate, canonical, target in [
+            (versions / "Current", version, version.name),
+            (framework / framework.stem, version / framework.stem, "Versions/Current/" + framework.stem),
+            (framework / "Resources", version / "Resources", "Versions/Current/Resources"),
+        ]:
+            if duplicate.is_symlink():
+                if duplicate.resolve() != canonical.resolve():
+                    raise RuntimeError(f"Unexpected framework link: {duplicate}")
+                continue
+            if duplicate.is_dir():
+                contents = sorted(p.relative_to(duplicate) for p in duplicate.rglob("*") if p.is_file())
+                expected = sorted(p.relative_to(canonical) for p in canonical.rglob("*") if p.is_file())
+                if contents != expected or any((duplicate / p).read_bytes() != (canonical / p).read_bytes() for p in contents):
+                    raise RuntimeError(f"Framework copies differ: {duplicate}")
+                shutil.rmtree(duplicate)
+            elif duplicate.is_file():
+                if duplicate.read_bytes() != canonical.read_bytes():
+                    raise RuntimeError(f"Framework copies differ: {duplicate}")
+                duplicate.unlink()
+            duplicate.symlink_to(target)
+
+
 def verify_app(app, signed):
     run("codesign", "--verify", "--deep", "--strict", "--verbose=2", app)
     info = plistlib.loads((app / "Contents/Info.plist").read_bytes())
@@ -103,6 +136,9 @@ def build(args):
     env = dict(os.environ, GEET_BUILD_DESTINATION=str(app), GEET_VERSION=args.version,
                GEET_BUILD_NUMBER=run("git", "rev-list", "--count", "HEAD", capture=True))
     run("zsh", "scripts/build.sh", "release", env=env)
+    normalize_frameworks(app)
+    if args.unsigned:
+        run("codesign", "--force", "--deep", "--sign", "-", app)
     if not args.unsigned:
         for path in macho_files(app):
             command = ["codesign", "--force", "--timestamp", "--options", "runtime", "--sign", identity]
