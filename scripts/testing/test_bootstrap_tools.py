@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 import io
 from pathlib import Path
 import tempfile
@@ -63,6 +64,25 @@ class BootstrapTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "Checksum mismatch"):
                     bootstrap.install("test/repo", "tool.zip", "tool", directory=True)
             self.assertEqual(target.read_bytes(), b"working")
+
+    def test_pinned_build_works_without_api_access(self):
+        data = b"verified helper"
+        lock = {"version": "v1", "sha256": hashlib.sha256(data).hexdigest()}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(bootstrap, "DEST", root), patch.object(bootstrap, "fetch", return_value=data) as fetch:
+                bootstrap.install("test/repo", "tool", "tool", locked=lock)
+                fetch.assert_called_once_with("https://github.com/test/repo/releases/download/v1/tool")
+            self.assertEqual((root / "tool").read_bytes(), data)
+
+    def test_corrupt_pinned_download_preserves_existing_tool(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "tool").write_bytes(b"working")
+            with patch.object(bootstrap, "DEST", root), patch.object(bootstrap, "fetch", return_value=b"corrupt"):
+                with self.assertRaisesRegex(RuntimeError, "Checksum mismatch"):
+                    bootstrap.install("test/repo", "tool", "tool", locked={"version":"v1", "sha256":"0" * 64})
+            self.assertEqual((root / "tool").read_bytes(), b"working")
 
 
 if __name__ == "__main__":

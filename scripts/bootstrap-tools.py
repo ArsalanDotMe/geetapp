@@ -65,16 +65,22 @@ def replace_tree(staged, target):
 
 
 def install(repo, asset_name, output_name, zipped=False, directory=False, locked=None):
-    endpoint = f"tags/{locked['version']}" if locked else "latest"
-    release = json.loads(fetch(f"https://api.github.com/repos/{repo}/releases/{endpoint}"))
-    asset = next(a for a in release["assets"] if a["name"] == asset_name)
-    digest = asset.get("digest") or ""
-    if not digest.startswith("sha256:"):
-        raise RuntimeError(f"No SHA-256 digest published for {asset_name}; refusing unverified download")
-    if locked and digest.removeprefix("sha256:") != locked["sha256"]:
-        raise RuntimeError(f"Published checksum differs from tools-lock.json for {asset_name}")
-    data = fetch(asset["browser_download_url"])
-    if hashlib.sha256(data).hexdigest() != digest.removeprefix("sha256:"):
+    if locked:
+        # The reviewed lock already records the published digest. Normal builds
+        # need no API quota or credentials, including on shared CI runners.
+        version = locked["version"]
+        digest = locked["sha256"]
+        url = f"https://github.com/{repo}/releases/download/{version}/{asset_name}"
+    else:
+        release = json.loads(fetch(f"https://api.github.com/repos/{repo}/releases/latest"))
+        asset = next(a for a in release["assets"] if a["name"] == asset_name)
+        published = asset.get("digest") or ""
+        if not published.startswith("sha256:"):
+            raise RuntimeError(f"No SHA-256 digest published for {asset_name}; refusing unverified download")
+        version, digest, url = release["tag_name"], published.removeprefix("sha256:"), asset["browser_download_url"]
+    print(f"Downloading {asset_name} ({version})", flush=True)
+    data = fetch(url)
+    if hashlib.sha256(data).hexdigest() != digest:
         raise RuntimeError(f"Checksum mismatch for {asset_name}")
     with tempfile.TemporaryDirectory(prefix=".geet-tool-", dir=DEST) as staging:
         staged = Path(staging) / output_name
@@ -90,7 +96,7 @@ def install(repo, asset_name, output_name, zipped=False, directory=False, locked
             staged.write_bytes(data)
             staged.chmod(0o755)
         replace_tree(staged, DEST / output_name)
-    return {"repository": repo, "version": release["tag_name"], "asset": asset_name, "sha256": digest.removeprefix("sha256:")}
+    return {"repository": repo, "version": version, "asset": asset_name, "sha256": digest}
 
 
 def main():
