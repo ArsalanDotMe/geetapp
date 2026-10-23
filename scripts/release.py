@@ -50,6 +50,8 @@ def verify_app(app, signed):
         if signed:
             run("codesign", "--verify", "--strict", path)
     resources = app / "Contents/Resources"
+    assert json.loads((ROOT / "licenses/tools-lock.json").read_text()) == json.loads((ROOT / "scripts/tools-lock.json").read_text()), "Refresh dependency notices and their lock before releasing"
+    assert (resources / "Tools/yt-dlp/_internal/THIRD_PARTY_LICENSES.txt").read_bytes() == (resources / "Licenses/yt-dlp-THIRD_PARTY_LICENSES.txt").read_bytes(), "yt-dlp notices do not match the packaged runtime"
     for name in ("LICENSE", "THIRD_PARTY_NOTICES.md", "SOURCES.md", "deno-LICENSE.txt",
                  "deno-THIRD_PARTY_LICENSES.txt", "yt-dlp-LICENSE.txt", "yt-dlp-THIRD_PARTY_LICENSES.txt"):
         assert (resources / "Licenses" / name).stat().st_size > 0, name

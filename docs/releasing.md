@@ -15,7 +15,10 @@ credentials, certificates, or private keys in this repository or command history
 Review tool versions in `scripts/tools-lock.json` and refresh `licenses/` and
 its source directions when changing them. `python3 scripts/collect-deno-licenses.py`
 collects Deno dependency notices from checksum-verified source crates in its
-pinned lock. Preserve yt-dlp's bundled notices too.
+pinned lock. Preserve yt-dlp's bundled notices too. Update
+`licenses/tools-lock.json` from `scripts/tools-lock.json` only after refreshing
+and checking the notices and source links. Release verification rejects stale
+license inventory pins and a yt-dlp notice that differs from the packaged copy.
 
 ## Build and publish
 

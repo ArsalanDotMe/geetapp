@@ -1,0 +1,2 @@
+# Preserve upstream notices verbatim; collapse generated license inventories in reviews.
+licenses/*-THIRD_PARTY_LICENSES.txt linguist-generated=true -whitespace
