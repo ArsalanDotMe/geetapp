@@ -12,3 +12,4 @@ Tools/
 *.xcuserstate
 xcuserdata/
 .idea/
+__pycache__/

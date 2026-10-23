@@ -2,6 +2,11 @@
 
 A native macOS 26 menu bar player for collecting YouTube playlists, long mixes, and live radio. SwiftUI and AppKit provide the interface, `AVPlayer` plays audio, and yt-dlp resolves links behind the scenes. No browser player, account, analytics, or web UI is embedded in the app.
 
+[Download for Apple silicon](https://github.com/ArsalanDotMe/geetapp/releases/latest/download/geet-apple-silicon.dmg) · [Website](https://geet.mashaltech.ee) · [Release notes](https://github.com/ArsalanDotMe/geetapp/releases/latest)
+
+Open the DMG, drag geet to Applications, then open it. The Listener icon appears
+in your menu bar. Public releases are Developer ID signed and notarized by Apple.
+
 ## Run
 
 The local development app is `build/Geet.app`. Open it, then click the Listener icon in your menu bar. Use **+** to add a public or unlisted YouTube playlist or video. Play resumes each collection’s saved track and position. The arrow beside a playlist opens its individual tracks. Right-click the menu bar icon and choose **Quit geet** to close the app.
@@ -26,7 +31,7 @@ The bootstrap downloads the releases pinned in `scripts/tools-lock.json`, verifi
 zsh scripts/build.sh release
 ```
 
-This produces `build/Release/Geet.app`. Both builds are locally ad-hoc signed. Public distribution still needs Developer ID signing, notarization, and hardened-runtime validation for the bundled helpers. Intel builds and distribution have not been validated.
+This produces `build/Release/Geet.app`. Development builds are locally ad-hoc signed. The [release process](docs/releasing.md) creates and verifies a Developer ID signed, notarized Apple silicon DMG. Intel builds and distribution have not been validated.
 
 ## Listening and offline storage
 
@@ -85,4 +90,4 @@ The selected [Mist & Slate palette](Design/References/mist-and-slate.png) suppor
 
 Library data and local caches live in `~/Library/Application Support/Geet`. Cloudflare receives requests for the public Discover feed. YouTube and its media/image hosts receive requests needed for the links you use. Clipboard links are only read when opening the panel. No browser cookies, credentials, or private accounts are imported.
 
-yt-dlp and Deno are third-party dependencies. Their upstream licenses and redistribution requirements apply, including the components packaged in the yt-dlp binary. See [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [Deno](https://github.com/denoland/deno). This project does not claim YouTube API approval.
+geet's own code is [MIT licensed](LICENSE). yt-dlp, Deno, fonts, and third-party assets retain their own licenses. See [third-party notices](THIRD_PARTY_NOTICES.md) and [corresponding source directions](licenses/SOURCES.md). This project does not claim YouTube API approval.

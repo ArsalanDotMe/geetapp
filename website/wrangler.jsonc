@@ -1,0 +1,13 @@
+{
+  "name": "geet-website",
+  "account_id": "b225fd2027198472b627795dd126aa15",
+  "compatibility_date": "2026-10-23",
+  "main": "worker.mjs",
+  "routes": [{ "pattern": "geet.mashaltech.ee/*", "zone_name": "mashaltech.ee" }],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/discover/*"]
+  },
+  "r2_buckets": [{ "binding": "DISCOVER", "bucket_name": "geet-discover" }]
+}
