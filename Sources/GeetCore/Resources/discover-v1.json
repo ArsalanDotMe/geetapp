@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "categories": [
+    {
+      "id": "on-the-air",
+      "title": "On the air",
+      "subtitle": "Live company for your day",
+      "items": [
+        {
+          "id": "lofi",
+          "title": "Halloween lofi radio",
+          "creator": "Lofi Girl",
+          "kind": "Radio",
+          "videoID": "0sfDth4lMLc"
+        },
+        {
+          "id": "chillhop-radio",
+          "title": "Chillhop radio",
+          "creator": "Chillhop Music",
+          "kind": "Radio",
+          "videoID": "5yx6BWlEVcY"
+        },
+        {
+          "id": "synthwave-radio",
+          "title": "Synthwave radio",
+          "creator": "Lofi Girl",
+          "kind": "Radio",
+          "videoID": "4xDzrJKXOOY"
+        }
+      ]
+    },
+    {
+      "id": "settle-in",
+      "title": "Settle in",
+      "subtitle": "A little space to think",
+      "items": [
+        {
+          "id": "classroom",
+          "title": "Chillhop in the Classroom",
+          "creator": "Chillhop Music",
+          "kind": "Playlist",
+          "videoID": "mypnwpywaaw",
+          "playlistID": "PLt7bG0K25iXhu8bSbLsoWFBf-xSyLwy2_"
+        },
+        {
+          "id": "fall",
+          "title": "Chillhop Essentials Fall",
+          "creator": "Chillhop Music",
+          "kind": "Playlist",
+          "videoID": "jiua2V9q9V0",
+          "playlistID": "PLt7bG0K25iXjIl0bopl1TY8_6n35gsgcd"
+        },
+        {
+          "id": "winter",
+          "title": "Chillhop Essentials Winter",
+          "creator": "Chillhop Music",
+          "kind": "Playlist",
+          "videoID": "Zq0cZnA2Dhc",
+          "playlistID": "PLt7bG0K25iXh5RbylpYcJwsHBpM0dGc2i"
+        }
+      ]
+    },
+    {
+      "id": "long-listens",
+      "title": "Long listens",
+      "subtitle": "Press play and stay a while",
+      "items": [
+        {
+          "id": "study-beats-7",
+          "title": "Chill Study Beats 7",
+          "creator": "Chillhop Music",
+          "kind": "Mix",
+          "videoID": "mypnwpywaaw"
+        },
+        {
+          "id": "winter-mix",
+          "title": "Chillhop Essentials Winter 2025",
+          "creator": "Chillhop Music",
+          "kind": "Mix",
+          "videoID": "Zq0cZnA2Dhc"
+        },
+        {
+          "id": "study-beats-8",
+          "title": "Chill Study Beats 8",
+          "creator": "Chillhop Music",
+          "kind": "Mix",
+          "videoID": "4fWLbK1b88M"
+        }
+      ]
+    }
+  ]
+}

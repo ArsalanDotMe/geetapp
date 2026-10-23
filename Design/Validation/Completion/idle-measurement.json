@@ -1,0 +1,10 @@
+{
+  "average_cpu_percent": 0.006386666666666578,
+  "cpu_seconds": 0.0009579999999999866,
+  "media_pipeline_count": 0,
+  "progress_observer_count": 0,
+  "resident_bytes_after": 70664192,
+  "resident_bytes_before": 70942720,
+  "resolver_process_starts": 0,
+  "sample_seconds": 15
+}

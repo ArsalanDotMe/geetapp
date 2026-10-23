@@ -1,0 +1,9 @@
+{
+  "audible_playback": "PASS",
+  "date": "2026-10-21",
+  "device_scope": "Owner used their available keyboard or headset; no claim that every hardware model was tested.",
+  "evidence": "Direct owner confirmation after testing the running native app",
+  "hardware_next": "PASS",
+  "hardware_play_pause": "PASS",
+  "menu_bar_panel_close_reopen": "PASS"
+}

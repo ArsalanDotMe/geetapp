@@ -1,0 +1,15 @@
+.build/
+.swiftpm/
+build/
+.DS_Store
+Tools/
+.wrangler/
+
+# Local credentials and editor state
+.env
+.env.*
+!.env.example
+*.xcuserstate
+xcuserdata/
+.idea/
+__pycache__/

@@ -1,0 +1,12 @@
+{
+  "automated_tests": 31,
+  "debug_binary_sha256": "253c96cb88b9aef831cbe6424f0d4ce15ea3721d75cb472e12f0145205a9ef9e",
+  "debug_build": "PASS",
+  "debug_signature": "PASS",
+  "release_binary_sha256": "02930c798acff9fb180e1bbf7e309d16230be6842577b2bea518801d5bbd2b56",
+  "release_build": "PASS",
+  "release_debug_hooks_absent": "PASS",
+  "release_signature": "PASS",
+  "source_commit": "c0cd0eaa722ddad09228b71dbe3e08eb020b14b2",
+  "test_suites": 9
+}

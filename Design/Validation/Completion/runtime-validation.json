@@ -1,0 +1,20 @@
+{
+  "audio_memory_bound": "PASS",
+  "automatic_next_track": "PASS",
+  "closed_panel_has_no_progress_observer": "PASS",
+  "closed_panel_playback_cpu_percent": "0.6664",
+  "final_pipeline_released": "PASS",
+  "finished": "2026-10-21T19:35:43Z",
+  "live_radio_native_playback": "PASS",
+  "native_offline_playback": "PASS: native player served saved audio without outbound network requests or yt-dlp",
+  "native_remote_audio_playback": "PASS: AVPlayer ready; playback clock advanced",
+  "native_repeat_all": "PASS",
+  "native_repeat_one": "PASS",
+  "no_process_at_initialization": "PASS",
+  "offline_download_complete": "PASS",
+  "open_panel_has_progress_observer": "PASS",
+  "paused_deadline_releases_pipeline": "PASS: test deadline 0.25s; production deadline 600s",
+  "public_playlist_import": "PASS: 19 available tracks",
+  "real_metadata_import": "PASS",
+  "resume_reuses_stream_without_process": "PASS"
+}

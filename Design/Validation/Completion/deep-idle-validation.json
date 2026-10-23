@@ -1,0 +1,10 @@
+{
+  "before_checkpoint_seconds": "540.7044250965118",
+  "elapsed_seconds": "603.7053190469742",
+  "finished": "2026-10-21T18:38:38Z",
+  "paused_at": "2026-10-21T18:28:34Z",
+  "paused_without_helper_launches": "PASS",
+  "pipeline_released_after_600_seconds": "PASS",
+  "pipeline_retained_before_600_seconds": "PASS",
+  "warm_resume_without_helper": "PASS"
+}
