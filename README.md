@@ -1,11 +1,10 @@
 # geet
 
-A native macOS 26 menu bar player for collecting YouTube playlists, long mixes, and live radio. SwiftUI and AppKit provide the interface, `AVPlayer` plays audio, and yt-dlp resolves links behind the scenes. No browser player, account, analytics, or web UI is embedded in the app.
+A native macOS 26 menu bar player for collecting YouTube playlists, mixes, and live radio.
 
 [Download for Apple silicon](https://github.com/ArsalanDotMe/geetapp/releases/latest/download/geet-apple-silicon.dmg) · [Website](https://geet.mashaltech.ee) · [Release notes](https://github.com/ArsalanDotMe/geetapp/releases/latest)
 
-Open the DMG, drag geet to Applications, then open it. The Listener icon appears
-in your menu bar. Public releases are Developer ID signed and notarized by Apple.
+Open the DMG, drag geet to Applications, then open it. The Listener icon appears in your menu bar. Public releases are Developer ID signed and notarized by Apple.
 
 ## Run
 
@@ -25,7 +24,7 @@ zsh scripts/build.sh
 open build/Geet.app
 ```
 
-The bootstrap downloads the releases pinned in `scripts/tools-lock.json`, verifies their published SHA-256 digests, and installs the complete unpacked yt-dlp runtime plus Deno. Use `python3 scripts/bootstrap-tools.py --update` to select newer releases. The build copies the whole runtime into the app. geet uses its bundled tools by default and does not need Homebrew or a separate Python installation. When no bundle is present, a local yt-dlp installation is supported. `GEET_YTDLP` can select an explicit executable. Deno handles YouTube's JavaScript challenges. Helpers are never installed or updated at app launch.
+The bootstrap downloads upstream yt-dlp and Deno releases, verifies their published SHA-256 digests, and records their versions in `scripts/tools-lock.json`. Helpers are bundled when building; the app never installs or updates them at launch. An installed yt-dlp is preferred, including Homebrew’s `/opt/homebrew/bin` and `/usr/local/bin` locations, because the bundled standalone launcher can take substantially longer to start. If extraction with the installed copy fails, geet retries with its bundled helper. `GEET_YTDLP` can select an explicit executable. Deno handles YouTube’s JavaScript challenges. No Homebrew installation is needed for the prepared app.
 
 ```sh
 zsh scripts/build.sh release
@@ -62,32 +61,8 @@ The app prefers native AAC audio and audio-only HLS. For older extractors that e
 
 For indexed DASH AAC, geet maps the existing fragment index to a small, immutable HLS playlist on a private loopback endpoint. Encoded audio is unchanged. This gives AVPlayer accurate duration and direct seeking without scanning or downloading an entire long mix. The listener binds only to `127.0.0.1`, uses a random path, accepts at most four connections, and is released with the player. Free streaming keeps chunks in bounded memory; disk retention requires the offline entitlement and an explicit cache or download choice.
 
-## Validation
-
-```sh
-zsh scripts/test.sh
-```
-
-The unit tests cover link normalization, queue history and repeat, duplicate entries, bounded metadata, resolver serialization and preemption, shared resolves, dependency cache reuse, failure cooldowns, disk-cache integrity, shared-download cancellation, memory-only streaming, DASH fragment indexing, initialization headers, HTTP byte ranges, and customer-facing error messages that keep provider and system diagnostics out of the primary alert.
-
-Playback startup behavior and the optional benchmark are documented in [playback startup](scripts/testing/playback-startup.md).
-
-Debug-only runtime checks use isolated data, muted playback, real public YouTube content, and the actual native player:
-
-```sh
-GEET_VALIDATION_DIR="$PWD/build/runtime-validation" \
-GEET_DATA_DIR="$PWD/build/runtime-app-data" \
-build/Geet.app/Contents/MacOS/Geet --validate-runtime
-```
-
-Additional debug checks are `--validate-library`, `--validate-audio`, and `--verify-deep-idle`. Use a fresh isolated `GEET_DATA_DIR` and `GEET_VALIDATION_DIR` for each run. Library acceptance starts empty and exercises real store actions, all four Discover choices, offline playback, persistence, refresh, and cancellation. Supply an unlisted playlist through `GEET_UNLISTED_URL`; it is excluded from the shareable report and captures. The audio check measures a two-hour mix, verifies duration and playback speed, then seeks near its end without downloading intervening audio.
-
-The paused deadline was also exercised over the actual 600 seconds, with no additional helpers and a successful warm resume. The short runtime suite injects a 0.25-second deadline for repeatable teardown checks. Offline playback is checked with unchanged outbound request and helper counters. Native Accessibility testing covers actual clicks and keyboard input. The owner separately confirmed audible playback, hardware Play/Pause and Next, and menu-bar panel close/reopen. These checks do not substitute for a long-running battery measurement.
-
-The selected [Mist & Slate palette](Design/References/mist-and-slate.png) supports light and dark appearance, native Liquid Glass controls, and continuous artwork fades. The [original composition](Design/References/option-2-cover-stories.png) is also retained. The [refinement review](design-qa.md) records the current comparison and acceptance checks. The [completion review](Design/Validation/Completion/README.md) contains fresh native captures, the independent design critique, runtime evidence, and acceptance limits. [Initial validation](Design/Validation/README.md) is retained as historical evidence. `--design-preview` uses a separate, in-memory fixture library solely for design review; no sample playlists are inserted into the real library. It and the runtime/interaction harnesses are excluded from release builds.
-
 ## Privacy and dependencies
 
 Library data and local caches live in `~/Library/Application Support/Geet`. Cloudflare receives requests for the public Discover feed. YouTube and its media/image hosts receive requests needed for the links you use. Clipboard links are only read when opening the panel. No browser cookies, credentials, or private accounts are imported.
 
-geet's own code is [MIT licensed](LICENSE). yt-dlp, Deno, fonts, and third-party assets retain their own licenses. See [third-party notices](THIRD_PARTY_NOTICES.md) and [corresponding source directions](licenses/SOURCES.md). This project does not claim YouTube API approval.
+geet's own code is [MIT licensed](LICENSE). yt-dlp, Deno, fonts, and third-party assets retain their own licenses. See [third-party notices](THIRD_PARTY_NOTICES.md) and [corresponding source directions](licenses/SOURCES.md).
