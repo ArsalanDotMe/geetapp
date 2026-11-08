@@ -42,7 +42,7 @@ enum RuntimeValidation {
         Paths.ensure(root)
         var checks: [String: String] = [:]
         let runner = ProcessRunner(), cache = MediaCache(root: root.appendingPathComponent("Media"))
-        let resolver = Resolver(root: root, bundledTools: tools, runner: runner)
+        let resolver = Resolver(root: root, bundledTools: tools, runner: runner, updater: ExtractorUpdater(root: root))
         let player = Player(resolver: resolver, cache: cache, idleDelay: 0.25, mediaCommands: false)
         player.volume = 0
         // Keep the first pass online even when re-running with an existing cache.

@@ -99,6 +99,12 @@ private final class AudioRangeProtocol: URLProtocol, @unchecked Sendable {
         } else { deliver() }
     }
     private func deliver() {
+        if let status = Int(request.url?.lastPathComponent ?? ""), status != 206 {
+            let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: "HTTP/1.1", headerFields: ["Content-Length": "0"])!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocolDidFinishLoading(self)
+            return
+        }
         let range = request.value(forHTTPHeaderField: "Range")!.dropFirst(6).split(separator: "-")
         let start = Int(range[0])!, end = min(Int(range[1])!, Self.audio.count - 1)
         let data = Self.audio.subdata(in: start..<(end + 1))
@@ -112,6 +118,21 @@ private final class AudioRangeProtocol: URLProtocol, @unchecked Sendable {
 }
 
 @Suite struct StreamingRetentionTests {
+    @Test(arguments: [(403, YouTubeFailure.audioRejected), (429, YouTubeFailure.rateLimited), (503, YouTubeFailure.temporarilyUnavailable)])
+    func rejectedAudioExplainsTheCause(status: Int, expected: YouTubeFailure) async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("geet-audio-error-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [AudioRangeProtocol.self]
+        let cache = MediaCache(root: root, configuration: configuration)
+        let stream = ResolvedStream(track: Track(id: "xyEpFjZ_uiE", title: "Test"), url: URL(string: "https://audio.geet.test/\(status)")!)
+        await #expect(throws: expected) { try await cache.chunk(key: "error", index: 0, stream: stream, retaining: false) }
+        #expect(await cache.memoryBytes() == 0)
+        #expect(await cache.snapshot().isEmpty)
+        let message = ListenerMessage.forError(expected, during: .playback)
+        #expect(!message.contains("cancel"))
+        #expect(message.contains("YouTube"))
+    }
+
     @Test func cancellingDownloadDoesNotCancelSharedPlaybackRange() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("geet-shared-\(UUID())")
         defer { try? FileManager.default.removeItem(at: root) }

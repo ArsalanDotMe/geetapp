@@ -1,9 +1,9 @@
 # Playback startup
 
 Run `zsh scripts/test.sh` for the offline Swift and bootstrap tests. Build with
-`zsh scripts/build.sh` to copy the complete unpacked yt-dlp runtime and Deno into
-`build/Geet.app`. Bootstrap uses the releases in `scripts/tools-lock.json`;
-`python3 scripts/bootstrap-tools.py --update` explicitly selects newer releases.
+`zsh scripts/build.sh` to package Deno into `build/Geet.app`. Bootstrap uses the Deno pin in
+`scripts/tools-lock.json`. yt-dlp is downloaded and verified separately in
+Application Support. See [extractor updates](../../docs/extractor-updates.md).
 
 The optional native benchmark plays two public videos while muted and uses
 disposable resolver and audio caches. Run it against the actual packaged tools
@@ -22,8 +22,9 @@ env -u GEET_YTDLP -u PYTHONHOME -u PYTHONPATH \
 `STARTUP` measures Play until the native playback clock exceeds 0.1 seconds.
 Attempt 0 has no resolved URL or audio cache; attempt 1 reuses both.
 `pipeline_seconds` includes extraction, the initial chunk, and loopback setup.
-The test asserts that the resolver uses the unpacked executable inside the app
-and separately executes bundled Deno with the same restricted helper PATH.
+The test asserts that the resolver uses the verified download in its disposable
+Application Support folder and separately executes bundled Deno with the same
+restricted helper PATH. First playback includes setup if no runtime is installed.
 
 `IMPORT` measures single-video import through playback. The
 `duplicate_extraction=true` case deliberately repeats extraction after import,
@@ -33,7 +34,8 @@ simulating the previous flow using the current format selection.
 chunk is resident. It checks one version probe and one extraction per queue,
 one audio request per track, no disk retention, and the six-chunk memory bound.
 
-The app's `--validate-audio` debug mode also uses bundled-only resolution. It
+The app's `--validate-audio` debug mode uses a verified download with external
+executable selection disabled. It
 checks long-mix playback progression for 30 seconds, near-end seeking, duration,
 bounded transfers, immediate pause after seeking, and pipeline teardown.
 

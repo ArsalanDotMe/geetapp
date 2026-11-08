@@ -30,13 +30,16 @@ public actor MediaCache {
     private var inflight: [String: Transfer] = [:]
     public private(set) var networkRequests = 0
     private let session: URLSession
+    private let responseGuard: RangeResponseGuard
     public init(root: URL = Paths.support.appendingPathComponent("Media", isDirectory: true), configuration: URLSessionConfiguration? = nil) {
         self.root = root
         entries = Paths.read([String: CacheEntry].self, from: root.appendingPathComponent("index.json")) ?? [:]
         let config = configuration ?? URLSessionConfiguration.ephemeral
         config.urlCache = nil; config.httpMaximumConnectionsPerHost = 2
         config.timeoutIntervalForRequest = 25; config.timeoutIntervalForResource = 60
-        session = URLSession(configuration: config, delegate: RangeResponseGuard(), delegateQueue: nil)
+        let responseGuard = RangeResponseGuard()
+        self.responseGuard = responseGuard
+        session = URLSession(configuration: config, delegate: responseGuard, delegateQueue: nil)
     }
     public static func key(trackID: String, formatID: String) -> String {
         let safe = (trackID + "-" + formatID).filter { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }
@@ -72,14 +75,21 @@ public actor MediaCache {
         if var running = inflight[name], !running.task.isCancelled {
             running.waiters.insert(waiter); inflight[name] = running; transfer = running
         } else {
-            let session = session
+            let session = session, responseGuard = responseGuard
             networkRequests += 1
             let task = Task<(Data, Int64), Error> {
                 let start = Int64(index) * Self.chunkSize
                 var request = URLRequest(url: stream.url)
                 stream.headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
                 request.setValue("bytes=\(start)-\(start + Self.chunkSize - 1)", forHTTPHeaderField: "Range")
-                let (data, response) = try await session.data(for: request)
+                let data: Data, response: URLResponse
+                do { (data, response) = try await session.data(for: request) }
+                catch {
+                    let rejection = responseGuard.rejection(for: request)
+                    try Task.checkCancellation()
+                    throw rejection ?? error
+                }
+                if let failure = RangeResponseGuard.failure(for: response) { throw failure }
                 guard let http = response as? HTTPURLResponse, http.statusCode == 206,
                       let range = http.value(forHTTPHeaderField: "Content-Range"),
                       let total = Int64(range.split(separator: "/").last ?? ""), total > start,
@@ -188,9 +198,34 @@ public actor MediaCache {
 /// Prevents URLSession from buffering an unbounded response when a server ignores
 /// a Range header. Each accepted response is at most one 512 KB chunk.
 private final class RangeResponseGuard: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private struct Key: Hashable { var url: URL?; var range: String? }
+    private var failures: [Key: Error] = [:]
+    private func key(_ request: URLRequest) -> Key { Key(url: request.url, range: request.value(forHTTPHeaderField: "Range")) }
+    func rejection(for request: URLRequest) -> Error? {
+        lock.lock(); defer { lock.unlock() }
+        return failures.removeValue(forKey: key(request))
+    }
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
                     completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        guard let failure = Self.failure(for: response) else {
+            completionHandler(.allow); return
+        }
+        if let request = dataTask.originalRequest {
+            lock.lock(); failures[key(request)] = failure; lock.unlock()
+        }
+        completionHandler(.cancel)
+    }
+    static func failure(for response: URLResponse) -> Error? {
         let http = response as? HTTPURLResponse
-        completionHandler(http?.statusCode == 206 && response.expectedContentLength > 0 && response.expectedContentLength <= MediaCache.chunkSize ? .allow : .cancel)
+        if http?.statusCode == 206 && response.expectedContentLength > 0 && response.expectedContentLength <= MediaCache.chunkSize { return nil }
+        let reason: Error
+        switch http?.statusCode {
+        case 403: reason = YouTubeFailure.audioRejected
+        case 429: reason = YouTubeFailure.rateLimited
+        case .some(500...599): reason = YouTubeFailure.temporarilyUnavailable
+        default: reason = GeetError.message("The audio server couldn’t provide a complete audio segment.")
+        }
+        return reason
     }
 }

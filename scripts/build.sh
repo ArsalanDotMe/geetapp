@@ -22,17 +22,10 @@ feed_url="${GEET_DISCOVER_URL:-$(python3 -c 'import json; print(json.load(open("
 if [[ -f Sources/Geet/Resources/Geet.icns ]]; then cp Sources/Geet/Resources/Geet.icns "$destination/Contents/Resources/Geet.icns"; fi
 if [[ -d Tools ]]; then
   mkdir -p "$destination/Contents/Resources/Tools"
-  for tool in yt-dlp deno; do
-    target="$destination/Contents/Resources/Tools/$tool"
-    if [[ "$tool" == yt-dlp && -d "Tools/$tool" ]]; then
-      [[ -x "Tools/$tool/yt-dlp_macos" && -d "Tools/$tool/_internal" ]] || { echo "Incomplete unpacked yt-dlp bundle" >&2; exit 1; }
-      rm -rf "$target"
-      cp -R "Tools/$tool" "$target"
-    elif [[ -f "Tools/$tool" && -x "Tools/$tool" ]]; then
-      rm -rf "$target"
-      cp "Tools/$tool" "$target"
-    fi
-  done
+  # yt-dlp is downloaded and verified in Application Support at runtime.
+  if [[ -f Tools/deno && -x Tools/deno ]]; then
+    cp Tools/deno "$destination/Contents/Resources/Tools/deno"
+  fi
 fi
 mkdir -p "$destination/Contents/Resources/Licenses"
 cp LICENSE THIRD_PARTY_NOTICES.md "$destination/Contents/Resources/Licenses/"

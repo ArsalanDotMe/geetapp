@@ -331,7 +331,7 @@ struct PanelView: View {
                 GroupBox("YouTube playback") {
                     HStack {
                         Text(store.dependencyText).font(.system(size: 12)).textSelection(.enabled)
-                        Spacer(); Button("Check again") { store.recheck() }
+                        Spacer(); Button("Check again") { store.recheck() }.disabled(store.checkingPlayback)
                     }.padding(8)
                 }
                 Text("geet 0.1").font(.system(size: 11)).foregroundStyle(GeetStyle.secondary)
