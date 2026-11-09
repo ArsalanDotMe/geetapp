@@ -13,6 +13,7 @@ final class AppStore: ObservableObject {
     @Published var savedTrackIDs: Set<String> = []
     @Published var storageBytes: Int64 = 0
     @Published var dependencyText = "Checked when you open a link"
+    @Published private(set) var checkingPlayback = false
     @Published var clipboardLink: String?
     @Published var offlineEnabled: Bool
     @Published private(set) var discoverFeed: DiscoverFeed
@@ -38,10 +39,12 @@ final class AppStore: ObservableObject {
     private var clipboardTask: Task<Void, Never>?
     private var clipboardChange = -1
     private var saveWork: DispatchWorkItem?
+    private var extractorUpdateTask: Task<Void, Never>?
+    private var dependencyUpdateError: Error?
     static var discover: [DiscoverPick] { DiscoverFeed.bundled.categories.flatMap(\.items) }
     var canRefreshDiscover: Bool { discoverClient != nil && !preview }
     init(preview: Bool = false, root overrideRoot: URL? = nil, discoverURL: URL? = nil,
-         discoverImporter: ((YouTubeLink) async throws -> Collection)? = nil) {
+         discoverImporter: ((YouTubeLink) async throws -> Collection)? = nil, playbackResolver: Resolver? = nil) {
         self.preview = preview
         self.root = overrideRoot ?? (preview ? FileManager.default.temporaryDirectory.appendingPathComponent("geet-design-preview") : Paths.support)
         let endpoint = discoverURL ?? Self.discoverEndpoint
@@ -59,7 +62,8 @@ final class AppStore: ObservableObject {
         library = Paths.read(LibraryDocument.self, from: root.appendingPathComponent("library.json")) ?? LibraryDocument()
         offlineEnabled = false
         #endif
-        resolver = Resolver(root: root, bundledTools: Bundle.main.resourceURL?.appendingPathComponent("Tools"))
+        resolver = playbackResolver ?? Resolver(root: root, bundledTools: Bundle.main.resourceURL?.appendingPathComponent("Tools"),
+                            updater: preview ? nil : ExtractorUpdater(root: root))
         self.discoverImporter = discoverImporter ?? { [resolver] link in try await resolver.importCollection(link) }
         cache = MediaCache(root: root.appendingPathComponent("Media", isDirectory: true))
         player = Player(resolver: resolver, cache: cache)
@@ -274,6 +278,7 @@ final class AppStore: ObservableObject {
     }
     func panelOpened(inspectClipboard: Bool = true) {
         player.panelVisible(true)
+        preparePlayback()
         Task { await updateStorage(); await updateDependency() }
         // Clipboard access occurs once on panel opening, never via polling.
         guard !preview, inspectClipboard else { return }
@@ -293,10 +298,25 @@ final class AppStore: ObservableObject {
         player.panelVisible(false); clipboardTask?.cancel(); artwork.cancelAll(); flushSave()
     }
     func recheck() {
+        guard extractorUpdateTask == nil else { return }
+        checkingPlayback = true
         dependencyText = "Checking playback…"
-        Task {
-            do { _ = try await resolver.recheck(); dependencyText = "Ready to play" }
-            catch { dependencyText = ListenerMessage.forError(error, during: .dependency) }
+        extractorUpdateTask = Task {
+            defer { extractorUpdateTask = nil; checkingPlayback = false }
+            do { _ = try await resolver.recheck(); dependencyUpdateError = nil }
+            catch { dependencyUpdateError = error }
+            await updateDependency()
+        }
+    }
+    func preparePlayback() {
+        guard !preview, extractorUpdateTask == nil else { return }
+        checkingPlayback = true
+        extractorUpdateTask = Task {
+            defer { extractorUpdateTask = nil; checkingPlayback = false }
+            if !(await resolver.hasPlaybackTool()) { dependencyText = "Preparing YouTube playback…" }
+            do { _ = try await resolver.checkForUpdates(); dependencyUpdateError = nil }
+            catch { dependencyUpdateError = error }
+            await updateDependency()
         }
     }
     func setLogin(_ enabled: Bool) {
@@ -310,7 +330,10 @@ final class AppStore: ObservableObject {
         storageBytes = entries.reduce(0) { $0 + $1.storedBytes }
     }
     private func updateDependency() async {
-        if await resolver.dependencyStatus() != nil { dependencyText = "Ready to play" }
+        let available = await resolver.hasPlaybackTool()
+        if let error = dependencyUpdateError {
+            dependencyText = ListenerMessage.playbackUpdateFailure(error, playbackAvailable: available)
+        } else if available { dependencyText = "Ready to play" }
     }
     private func saveConfiguration() {
         library.shuffle = player.shuffle; library.repeatMode = player.repeatMode; library.volume = player.volume; scheduleSave()

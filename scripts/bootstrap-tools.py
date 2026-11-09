@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install checksum-verified upstream helpers into ignored Tools/, never at launch."""
+"""Install checksum-verified build-time helpers into ignored Tools/."""
 import argparse
 import hashlib
 import io
@@ -108,10 +108,9 @@ def main():
     locked = {} if args.update else json.loads(lock_file.read_text())
     arch = "aarch64" if platform.machine() == "arm64" else "x86_64"
     deno_asset = f"deno-{arch}-apple-darwin.zip"
-    if locked and (locked["yt-dlp"]["asset"] != "yt-dlp_macos.zip" or locked["deno"]["asset"] != deno_asset):
+    if locked and (locked["deno"]["asset"] != deno_asset):
         raise RuntimeError("Locked helpers do not match this packaging or architecture; use --update")
     versions = {
-        "yt-dlp": install("yt-dlp/yt-dlp", "yt-dlp_macos.zip", "yt-dlp", directory=True, locked=locked.get("yt-dlp")),
         "deno": install("denoland/deno", deno_asset, "deno", zipped=True, locked=locked.get("deno")),
     }
     temporary = lock_file.with_suffix(".json.new")

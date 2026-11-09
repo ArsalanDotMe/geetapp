@@ -103,7 +103,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         if CommandLine.arguments.contains("--validate-audio") {
             Task {
-                let passed = await CompletionValidation.verifyAudio(tools: Bundle.main.resourceURL!.appendingPathComponent("Tools"))
+                let passed = await CompletionValidation.verifyAudio(tools: Bundle.main.resourceURL!.appendingPathComponent("Tools"), resolver: store.resolver)
                 store.shutdown(); exit(passed ? 0 : 1)
             }
         }
@@ -149,6 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             RuntimeValidation.measureIdle(store: store, destination: CommandLine.arguments[index + 1])
         }
         #endif
+        store.preparePlayback()
         if CommandLine.arguments.contains("--show") || store.preview {
             // Status-item hosting reaches WindowServer after the launch callback.
             // This one-shot only exists for an explicitly requested first panel.

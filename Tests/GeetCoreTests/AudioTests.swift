@@ -86,8 +86,29 @@ import Testing
     }
 }
 
+private final class AudioResponseGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var waiting: [URL: DispatchWorkItem] = [:]
+    private var released: Set<URL> = []
+    func hold(_ work: DispatchWorkItem, for url: URL) {
+        lock.lock()
+        let ready = released.remove(url) != nil
+        if !ready { waiting[url] = work }
+        lock.unlock()
+        if ready { work.perform() }
+    }
+    func release(_ url: URL) {
+        lock.lock()
+        let work = waiting.removeValue(forKey: url)
+        if work == nil { released.insert(url) }
+        lock.unlock()
+        work?.perform()
+    }
+}
+
 private final class AudioRangeProtocol: URLProtocol, @unchecked Sendable {
     static let audio = Data(repeating: 7, count: Int(MediaCache.chunkSize) + 100)
+    static let gate = AudioResponseGate()
     private var pending: DispatchWorkItem?
     override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "audio.geet.test" }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -95,10 +116,16 @@ private final class AudioRangeProtocol: URLProtocol, @unchecked Sendable {
         if request.url?.path == "/slow" {
             let work = DispatchWorkItem { [weak self] in self?.deliver() }
             pending = work
-            DispatchQueue.global().asyncAfter(deadline: .now() + 0.3, execute: work)
+            Self.gate.hold(work, for: request.url!)
         } else { deliver() }
     }
     private func deliver() {
+        if let status = Int(request.url?.lastPathComponent ?? ""), status != 206 {
+            let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: "HTTP/1.1", headerFields: ["Content-Length": "0"])!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocolDidFinishLoading(self)
+            return
+        }
         let range = request.value(forHTTPHeaderField: "Range")!.dropFirst(6).split(separator: "-")
         let start = Int(range[0])!, end = min(Int(range[1])!, Self.audio.count - 1)
         let data = Self.audio.subdata(in: start..<(end + 1))
@@ -112,23 +139,51 @@ private final class AudioRangeProtocol: URLProtocol, @unchecked Sendable {
 }
 
 @Suite struct StreamingRetentionTests {
-    @Test func cancellingDownloadDoesNotCancelSharedPlaybackRange() async throws {
+    @Test(arguments: [(403, YouTubeFailure.audioRejected), (429, YouTubeFailure.rateLimited), (503, YouTubeFailure.temporarilyUnavailable)])
+    func rejectedAudioExplainsTheCause(status: Int, expected: YouTubeFailure) async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("geet-audio-error-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [AudioRangeProtocol.self]
+        let cache = MediaCache(root: root, configuration: configuration)
+        let stream = ResolvedStream(track: Track(id: "xyEpFjZ_uiE", title: "Test"), url: URL(string: "https://audio.geet.test/\(status)")!)
+        await #expect(throws: expected) { try await cache.chunk(key: "error", index: 0, stream: stream, retaining: false) }
+        #expect(await cache.memoryBytes() == 0)
+        #expect(await cache.snapshot().isEmpty)
+        let message = ListenerMessage.forError(expected, during: .playback)
+        #expect(!message.contains("cancel"))
+        #expect(message.contains("YouTube"))
+    }
+
+    @Test(arguments: 0..<20)
+    func cancellingDownloadDoesNotCancelSharedPlaybackRange(attempt: Int) async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("geet-shared-\(UUID())")
         defer { try? FileManager.default.removeItem(at: root) }
         let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [AudioRangeProtocol.self]
         let cache = MediaCache(root: root, configuration: configuration)
-        let stream = ResolvedStream(track: Track(id: "xyEpFjZ_uiE", title: "Shared audio"), url: URL(string: "https://audio.geet.test/slow")!)
+        let url = URL(string: "https://audio.geet.test/slow?request=\(UUID())")!
+        defer { AudioRangeProtocol.gate.release(url) }
+        let stream = ResolvedStream(track: Track(id: "xyEpFjZ_uiE", title: "Shared audio"), url: url)
         let key = MediaCache.key(trackID: stream.track.id, formatID: stream.formatID)
         let download = Task { try await cache.chunk(key: key, index: 0, stream: stream) }
-        try await Task.sleep(for: .milliseconds(50))
+        try await readers(1, in: cache)
         let playback = Task { try await cache.chunk(key: key, index: 0, stream: stream, retaining: false) }
-        try await Task.sleep(for: .milliseconds(50)); download.cancel()
+        try await readers(2, in: cache)
+        download.cancel()
+        try await readers(1, in: cache)
+        AudioRangeProtocol.gate.release(url)
         let bytes = try await playback.value
         #expect(bytes.0.count == Int(MediaCache.chunkSize))
         #expect(await cache.networkRequests == 1)
         #expect(await cache.snapshot().isEmpty)
         do { _ = try await download.value; Issue.record("A cancelled download must stop without storing audio.") }
         catch { #expect(error is CancellationError) }
+    }
+    private func readers(_ count: Int, in cache: MediaCache) async throws {
+        let deadline = Date().addingTimeInterval(10)
+        while await cache.pendingReaderCount != count {
+            guard Date() < deadline else { throw URLError(.timedOut) }
+            try await Task.sleep(for: .milliseconds(1))
+        }
     }
     @Test func streamingStaysInMemoryAndCanBeSavedWithoutAnotherRequest() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("geet-retention-\(UUID())")

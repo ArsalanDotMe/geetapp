@@ -1,10 +1,4 @@
 {
-  "yt-dlp": {
-    "repository": "yt-dlp/yt-dlp",
-    "version": "2026.08.19",
-    "asset": "yt-dlp_macos.zip",
-    "sha256": "07e54b0865303c864006925913bce2604f8ee8cc6f18699bac9c309f9328a6d8"
-  },
   "deno": {
     "repository": "denoland/deno",
     "version": "v2.9.8",

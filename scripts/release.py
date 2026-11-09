@@ -84,14 +84,13 @@ def verify_app(app, signed):
             run("codesign", "--verify", "--strict", path)
     resources = app / "Contents/Resources"
     assert json.loads((ROOT / "licenses/tools-lock.json").read_text()) == json.loads((ROOT / "scripts/tools-lock.json").read_text()), "Refresh dependency notices and their lock before releasing"
-    assert (resources / "Tools/yt-dlp/_internal/THIRD_PARTY_LICENSES.txt").read_bytes() == (resources / "Licenses/yt-dlp-THIRD_PARTY_LICENSES.txt").read_bytes(), "yt-dlp notices do not match the packaged runtime"
+    assert not (resources / "Tools/yt-dlp").exists(), "yt-dlp must be downloaded into Application Support, not bundled"
     for name in ("LICENSE", "THIRD_PARTY_NOTICES.md", "SOURCES.md", "deno-LICENSE.txt",
-                 "deno-THIRD_PARTY_LICENSES.txt", "yt-dlp-LICENSE.txt", "yt-dlp-THIRD_PARTY_LICENSES.txt"):
+                 "deno-THIRD_PARTY_LICENSES.txt"):
         assert (resources / "Licenses" / name).stat().st_size > 0, name
     assert (resources / "Licenses/v8-THIRD_PARTY_LICENSES.txt").stat().st_size > 0
     env = dict(os.environ, PATH="/usr/bin:/bin", PYTHONHOME="", PYTHONPATH="")
     lock = json.loads((ROOT / "scripts/tools-lock.json").read_text())
-    assert run(resources / "Tools/yt-dlp/yt-dlp_macos", "--ignore-config", "--version", capture=True, env=env) == lock["yt-dlp"]["version"]
     assert run(resources / "Tools/deno", "--version", capture=True, env=env).splitlines()[0].split()[:2] == ["deno", lock["deno"]["version"].lstrip("v")]
     run(resources / "Tools/deno", "eval", "let n = 0; for (let i = 0; i < 100000; i++) n += i; if (n !== 4999950000) throw Error('JIT check failed');", env=env)
     run(app / "Contents/MacOS/Geet", "--validate-discover-feed", ROOT / "Sources/GeetCore/Resources/discover-v1.json")

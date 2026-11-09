@@ -8,7 +8,7 @@ zsh scripts/build.sh
 open build/Geet.app
 ```
 
-The build bundles checksum-pinned yt-dlp and Deno helpers, so the prepared app doesn't need Homebrew or a separate Python installation. Dependencies are never installed or updated at app launch.
+The build bundles checksum-pinned Deno. On launch, geet downloads and verifies the latest stable yt-dlp runtime into Application Support, then checks daily for updates. A fresh installation needs GitHub access before YouTube playback works. Homebrew and a separate Python installation aren't needed. See [extractor updates](extractor-updates.md) for verification and rollback behavior.
 
 Run the unit tests with:
 

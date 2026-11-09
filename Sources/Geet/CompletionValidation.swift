@@ -172,7 +172,7 @@ enum CompletionValidation {
 
     static func verifyDeepIdle(tools: URL) async -> Bool {
         let output = URL(fileURLWithPath: ProcessInfo.processInfo.environment["GEET_VALIDATION_DIR"] ?? "/tmp/geet-deep-idle")
-        let resolver = Resolver(root: output, bundledTools: tools)
+        let resolver = Resolver(root: output, bundledTools: tools, updater: ExtractorUpdater(root: output))
         let player = Player(resolver: resolver, cache: MediaCache(root: output.appendingPathComponent("Media")), mediaCommands: false)
         player.volume = 0
         var report: [String: String] = [:]
@@ -201,10 +201,10 @@ enum CompletionValidation {
             && report["pipeline_released_after_600_seconds"] == "PASS" && report["paused_without_helper_launches"] == "PASS" && report["error"] == nil
     }
 
-    static func verifyAudio(tools: URL) async -> Bool {
+    static func verifyAudio(tools: URL, resolver suppliedResolver: Resolver? = nil) async -> Bool {
         let output = URL(fileURLWithPath: ProcessInfo.processInfo.environment["GEET_VALIDATION_DIR"] ?? "/tmp/geet-audio")
         let cache = MediaCache(root: output.appendingPathComponent("Media"))
-        let resolver = Resolver(root: output, bundledTools: tools, allowExternalTools: false)
+        let resolver = suppliedResolver ?? Resolver(root: output, bundledTools: tools, allowExternalTools: false, updater: ExtractorUpdater(root: output))
         let player = Player(resolver: resolver, cache: cache, mediaCommands: false)
         player.volume = 0
         var report: [String: String] = [:]
@@ -219,7 +219,7 @@ enum CompletionValidation {
             let probe = await resolver.dependencyStatus()
             report["extractor_path"] = probe?.path
             report["extractor_version"] = probe?.version
-            record("uses_unpacked_bundled_extractor", probe?.path == tools.appendingPathComponent("yt-dlp/yt-dlp_macos").path)
+            record("uses_verified_downloaded_extractor", probe?.path.hasPrefix(output.path + "/ExtractorUpdates/") == true)
             let deno = try await resolver.runner.run(tools.appendingPathComponent("deno"), arguments: ["--version"])
             record("bundled_deno_runs_without_homebrew", String(decoding: deno, as: UTF8.self).hasPrefix("deno "))
             record("recorded_native_duration_matches_metadata", abs((player.media?.currentItem?.duration.seconds ?? 0) - (player.track?.duration ?? 0)) < 2)
@@ -264,12 +264,13 @@ enum CompletionValidation {
 
     private static func ready(_ player: Player, seconds: Double = 45) async throws {
         try await until(seconds: seconds) {
-            player.media?.currentItem?.status == .readyToPlay && player.media?.timeControlStatus == .playing && (player.media?.currentTime().seconds ?? 0) > 0.3
+            if let error = player.error { throw GeetError.message(error) }
+            return player.media?.currentItem?.status == .readyToPlay && player.media?.timeControlStatus == .playing && (player.media?.currentTime().seconds ?? 0) > 0.3
         }
     }
-    private static func until(seconds: Double = 45, _ condition: () -> Bool) async throws {
+    private static func until(seconds: Double = 45, _ condition: () throws -> Bool) async throws {
         let deadline = Date().addingTimeInterval(seconds)
-        while !condition() {
+        while !(try condition()) {
             guard Date() < deadline else { throw GeetError.message("A test operation did not finish within \(Int(seconds)) seconds.") }
             try await Task.sleep(for: .milliseconds(100))
         }

@@ -5,20 +5,20 @@ the preferred source forms, including upstream build instructions. No helper
 source was modified by geet; only Apple signatures were replaced. The pinned
 binary archive names and SHA-256 checksums are in `scripts/tools-lock.json`.
 
-## yt-dlp 2026.08.19
+## Downloaded yt-dlp runtime
 
-- [Complete source archive](https://github.com/yt-dlp/yt-dlp/archive/refs/tags/2026.08.19.tar.gz)
-- [Exact macOS build requirements](https://github.com/yt-dlp/yt-dlp/blob/2026.08.19/bundle/requirements/macos.txt)
-- [Executable build script](https://github.com/yt-dlp/yt-dlp/blob/2026.08.19/bundle/pyinstaller.py)
-- [Release workflow](https://github.com/yt-dlp/yt-dlp/blob/2026.08.19/.github/workflows/build.yml)
-- [mutagen 1.48.1 source, GPL-2.0-or-later](https://pypi.org/project/mutagen/1.48.1/#files)
-- [PyInstaller 6.22.0 source and bootloader, GPL with bootloader exception](https://pypi.org/project/pyinstaller/6.22.0/#files)
-- [certifi 2026.7.22 source and certificate data, MPL-2.0](https://pypi.org/project/certifi/2026.7.22/#files)
+yt-dlp is not bundled. geet downloads the official macOS archive directly from
+upstream, verifies GitHub's published SHA-256 digest, and preserves its notices.
+Find the active and previous versions in `Geet/ExtractorUpdates/state.json` in
+Application Support. For each recorded `VERSION`, source and build instructions
+are available at:
 
-The macOS helper uses Apple's system libedit, not GNU Readline. The upstream
-aggregate license text also describes components for other platforms that are
-not present in this macOS archive. The complete dependency pins above identify
-the remaining permissively licensed Python modules and build tools.
+- `https://github.com/yt-dlp/yt-dlp/archive/refs/tags/VERSION.tar.gz`
+- `https://github.com/yt-dlp/yt-dlp/blob/VERSION/bundle/requirements/macos.txt`
+- `https://github.com/yt-dlp/yt-dlp/blob/VERSION/bundle/pyinstaller.py`
+
+The runtime's `_internal/THIRD_PARTY_LICENSES.txt` preserves upstream dependency
+notices. geet does not modify or re-sign downloaded runtimes.
 
 ## Deno 2.9.8
 
