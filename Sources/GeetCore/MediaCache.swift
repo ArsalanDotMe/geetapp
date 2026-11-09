@@ -29,6 +29,10 @@ public actor MediaCache {
     }
     private var inflight: [String: Transfer] = [:]
     public private(set) var networkRequests = 0
+    #if DEBUG
+    // Synchronize cancellation tests with actual enrollment, not elapsed time.
+    var pendingReaderCount: Int { inflight.values.reduce(0) { $0 + $1.waiters.count } }
+    #endif
     private let session: URLSession
     private let responseGuard: RangeResponseGuard
     public init(root: URL = Paths.support.appendingPathComponent("Media", isDirectory: true), configuration: URLSessionConfiguration? = nil) {
