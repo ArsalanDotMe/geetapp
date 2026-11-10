@@ -12,6 +12,59 @@ SPEC = importlib.util.spec_from_file_location('release', Path(__file__).parents[
 release = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(release)
 
+class InstallerContentsTests(unittest.TestCase):
+    def verify_fixture(self, extra=None, target='/Applications'):
+        def run(*args, **kwargs):
+            if args[:2] == ('hdiutil', 'attach'):
+                mount = Path(args[args.index('-mountpoint') + 1])
+                (mount / 'Geet.app').mkdir()
+                (mount / 'Applications').symlink_to(target)
+                (mount / '.DS_Store').write_bytes(b'Finder layout')
+                (mount / '.background.tiff').write_bytes(b'background')
+                if extra:
+                    (mount / extra).touch()
+
+        with patch.object(release, 'run', side_effect=run), patch.object(release, 'verify_installer_layout'), \
+                patch.object(release, 'verify_app') as verify:
+            release.verify_dmg(Path('preview.dmg'), signed=False)
+            verify.assert_called_once()
+
+    def test_accepts_two_installation_items_and_hidden_layout(self):
+        self.verify_fixture()
+
+    def test_rejects_extra_visible_files(self):
+        for extra in ('Install.txt', 'Licenses'):
+            with self.subTest(extra=extra), self.assertRaisesRegex(AssertionError, 'only geet and Applications'):
+                self.verify_fixture(extra=extra)
+
+    def test_rejects_incorrect_applications_shortcut(self):
+        with self.assertRaises(AssertionError):
+            self.verify_fixture(target='/tmp')
+
+@unittest.skipUnless(importlib.util.find_spec('ds_store'), 'Install scripts/requirements-release.txt')
+class InstallerWindowTests(unittest.TestCase):
+    def fixture(self, root, bounds):
+        from ds_store import DSStore
+        with DSStore.open(str(root / '.DS_Store'), 'w+') as store:
+            store['.']['bwsp'] = {'WindowBounds': bounds, 'ShowToolbar': False}
+            store['.']['icvp'] = {'iconSize': 128}
+            store['Geet.app']['Iloc'] = (176, 170)
+            store['Applications']['Iloc'] = (464, 170)
+
+    def test_window_includes_title_bar_and_fits_background(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.fixture(root, '{{200, 200}, {640, 412}}')
+            release.verify_installer_layout(root)
+
+    def test_rejects_clipped_or_oversized_window(self):
+        for size in ('640, 380', '920, 436'):
+            with self.subTest(size=size), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                self.fixture(root, '{{200, 200}, {' + size + '}}')
+                with self.assertRaisesRegex(AssertionError, 'fit its background'):
+                    release.verify_installer_layout(root)
+
 class ReleasePublishTests(unittest.TestCase):
     def test_publishes_only_dmg(self):
         with tempfile.TemporaryDirectory() as temporary:

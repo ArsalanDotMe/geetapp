@@ -1,5 +1,6 @@
 .build/
 .swiftpm/
+.release-venv/
 build/
 .DS_Store
 Tools/

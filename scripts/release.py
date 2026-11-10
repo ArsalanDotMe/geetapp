@@ -15,6 +15,23 @@ import tempfile
 ROOT = Path(__file__).resolve().parent.parent
 REPO = "ArsalanDotMe/geetapp"
 MACHO = {bytes.fromhex(x) for x in ("cffaedfe", "cefaedfe", "cafebabe", "bebafeca", "cafebabf")}
+# Finder saves the full frame, including its 32-point title bar. The content
+# area must match the background's 640 x 380 points.
+DMG_WINDOW_SIZE = (640, 412)
+
+
+def verify_installer_layout(contents):
+    from ds_store import DSStore
+
+    with DSStore.open(str(contents / ".DS_Store"), "r") as store:
+        window = store["."]["bwsp"]
+        bounds = tuple(map(int, re.findall(r"-?\d+", window["WindowBounds"])))
+        assert bounds[2:] == DMG_WINDOW_SIZE, "Installer window must fit its background"
+        for option in ("ShowToolbar", "ShowSidebar", "ShowStatusBar", "ShowTabView"):
+            assert not window.get(option, False), f"Installer must hide {option}"
+        assert store["."]["icvp"]["iconSize"] == 128
+        assert store["Geet.app"]["Iloc"] == (176, 170)
+        assert store["Applications"]["Iloc"] == (464, 170)
 
 
 def run(*args, capture=False, **kwargs):
@@ -108,15 +125,50 @@ def verify_dmg(dmg, signed=True):
     with tempfile.TemporaryDirectory(prefix="geet-mount-") as mount:
         run("hdiutil", "attach", "-readonly", "-nobrowse", "-mountpoint", mount, dmg)
         try:
-            assert (Path(mount) / "Applications").is_symlink()
+            contents = Path(mount)
+            assert (contents / "Applications").is_symlink()
+            assert os.readlink(contents / "Applications") == "/Applications"
+            visible = {p.name for p in contents.iterdir() if not p.name.startswith(".")}
+            assert visible == {"Geet.app", "Applications"}, "Installer must show only geet and Applications"
+            assert (contents / ".DS_Store").is_file(), "Missing installer window layout"
+            assert (contents / ".background.tiff").is_file(), "Missing installer background"
+            verify_installer_layout(contents)
             verify_app(Path(mount) / "Geet.app", signed)
         finally:
             run("hdiutil", "detach", mount)
 
 
+def create_dmg(app, dmg):
+    import dmgbuild
+
+    dmgbuild.build_dmg(str(dmg), "geet", settings={
+        "format": "UDZO",
+        "files": [str(app)],
+        "symlinks": {"Applications": "/Applications"},
+        "hide_extensions": ["Geet.app"],
+        "background": str(ROOT / "scripts/assets/dmg-background.png"),
+        "window_rect": ((200, 200), DMG_WINDOW_SIZE),
+        "default_view": "icon-view",
+        "show_toolbar": False,
+        "show_sidebar": False,
+        "show_status_bar": False,
+        "show_tab_view": False,
+        "show_pathbar": False,
+        "arrange_by": None,
+        "icon_size": 128,
+        "text_size": 16,
+        "icon_locations": {"Geet.app": (176, 170), "Applications": (464, 170)},
+    })
+
+
 def build(args):
     if platform.machine() != "arm64":
         raise RuntimeError("Build on an Apple silicon Mac")
+    # Fail before building or notarizing if the packaging tools are missing.
+    try:
+        import dmgbuild
+    except ImportError as error:
+        raise RuntimeError("Install release tools with: python3 -m pip install -r scripts/requirements-release.txt") from error
     commit = clean_commit()
     output = ROOT / "build/releases" / args.version
     if output.exists():
@@ -154,14 +206,8 @@ def build(args):
         run("xcrun", "stapler", "staple", app)
         archive.unlink()
     verify_app(app, not args.unsigned)
-    stage = output / "image"
-    stage.mkdir()
-    run("ditto", app, stage / "Geet.app")
-    (stage / "Applications").symlink_to("/Applications")
-    shutil.copytree(app / "Contents/Resources/Licenses", stage / "Licenses")
-    (stage / "Install.txt").write_text("Drag geet to Applications, then open it. Click the Listener icon in your menu bar.\nRequires an Apple silicon Mac with macOS 26 or later.\n")
     dmg = output / "geet-apple-silicon.dmg"
-    run("hdiutil", "create", "-volname", "geet", "-srcfolder", stage, "-format", "UDZO", "-ov", dmg)
+    create_dmg(app, dmg)
     if not args.unsigned:
         run("codesign", "--timestamp", "--sign", identity, dmg)
         run("xcrun", "notarytool", "submit", dmg, "--keychain-profile", profile, "--wait")
@@ -193,7 +239,7 @@ def publish(args):
     assert not existing or existing.split()[0] == commit, "The remote tag points to another commit"
     verify_dmg(output / "geet-apple-silicon.dmg")
     notes = output / "release-notes.md"
-    notes.write_text(f"geet {args.version} for Apple silicon Macs running macOS 26 or later.\n\nDownload **geet-apple-silicon.dmg**, open it, and drag geet to Applications. The app and DMG are Developer ID signed, notarized by Apple, and stapled.\n\nStreaming and Discover are available without an account.\n\ngeet's source is MIT licensed; bundled tools retain their own licenses. Third-party notices and source directions are included in the DMG.\n\nSource commit: {commit}\n")
+    notes.write_text(f"geet {args.version} for Apple silicon Macs running macOS 26 or later.\n\nA cleaner installer with large geet and Applications icons, a soft ivory background, and a window sized to fit.\n\nDownload **geet-apple-silicon.dmg**, open it, and drag geet to Applications. The app and DMG are Developer ID signed, notarized by Apple, and stapled.\n\nStreaming and Discover are available without an account.\n\ngeet's source is MIT licensed; bundled tools retain their own licenses. Third-party notices and source directions are inside the app's Contents/Resources/Licenses folder.\n\nSource commit: {commit}\n")
     # A draft keeps the installer hidden until every asset has uploaded.
     run("gh", "release", "create", tag, "--repo", REPO, "--target", commit, "--draft", "--title", "geet " + args.version, "--notes-file", notes,
         output / "geet-apple-silicon.dmg")
