@@ -27,7 +27,11 @@ jobs:
           python3 scripts/prepare-website.py
           node --test website/worker.test.mjs
       - name: Build and verify an Apple silicon DMG
-        run: python3 scripts/release.py build 0.1.0 --unsigned
+        run: |
+          python3 -m venv .release-venv
+          .release-venv/bin/pip install -r scripts/requirements-release.txt
+          source .release-venv/bin/activate
+          python scripts/release.py build 0.1.0 --unsigned
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: geet-apple-silicon-ci-unsigned

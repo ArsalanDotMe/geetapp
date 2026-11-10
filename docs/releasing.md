@@ -6,6 +6,14 @@ release version is supplied explicitly; app metadata is stamped during staging.
 
 ## Prerequisites
 
+Create a release environment and install the pinned DMG layout tools:
+
+```sh
+python3 -m venv .release-venv
+source .release-venv/bin/activate
+python3 -m pip install -r scripts/requirements-release.txt
+```
+
 Use a Developer ID Application identity with its private key in the login
 keychain. Store notarization credentials with `xcrun notarytool
 store-credentials geet-notary`, following Apple's interactive prompts. Never put
@@ -41,7 +49,13 @@ linkage, and signs nested Mach-O files before signing the app. Only Deno gets
 the JIT entitlement. It notarizes and staples both app and DMG, mounts the DMG
 read-only, and repeats verification on the actual packaged app with a minimal
 PATH. Both the app and disk image must pass Gatekeeper. The DMG includes an
-Applications shortcut and license notices.
+Applications shortcut. Its compact window shows only geet and Applications,
+with large icons and a Retina background. The saved window is 640 x 412 points,
+including the title bar, so its content fits the 640 x 380 background. Mounted
+release verification checks these dimensions and the icon layout. License notices and source directions
+remain inside `Geet.app/Contents/Resources/Licenses`; no separate installation
+text or license folder is added to the window. To regenerate the background,
+run `swift scripts/dmg-background.swift`.
 
 The build also creates a local source archive from the exact commit, SHA-256
 checksums, source directions, and a manifest recording the commit and signing
