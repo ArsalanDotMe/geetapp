@@ -174,9 +174,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         #endif
     }
     @objc private func toggle() {
-        if let event = NSApp.currentEvent,
-           event.type == .rightMouseUp || event.modifierFlags.contains(.control),
-           let button = status.button {
+        if NSApp.currentEvent?.type == .rightMouseUp {
+            store.player.toggle()
+        } else if NSApp.currentEvent?.modifierFlags.contains(.control) == true,
+                  let button = status.button {
             if popover.isShown { popover.performClose(nil) }
             let menu = NSMenu()
             let quit = NSMenuItem(title: "Quit geet", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")

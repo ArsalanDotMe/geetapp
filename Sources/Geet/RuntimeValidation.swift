@@ -68,7 +68,11 @@ enum RuntimeValidation {
             try await Task.sleep(for: .seconds(5))
             let playingAfter = sample()
             checks["closed_panel_playback_cpu_percent"] = String(format: "%.4f", (playingAfter.0 - playingBefore.0) / 5 * 100)
-            player.pause()
+            player.toggle()
+            record("toggle_pauses_playback", !player.isPlaying && !player.isLoading)
+            player.toggle()
+            record("toggle_resumes_same_track", player.isPlaying && player.collectionID == collection.id && player.track?.id == collection.tracks[0].id)
+            player.toggle()
             try await Task.sleep(for: .milliseconds(400))
             record("paused_deadline_releases_pipeline", player.isSleeping && !player.hasMediaPipeline && !player.hasProgressObserver, "test deadline 0.25s; production deadline 600s")
             let starts = await runner.starts
