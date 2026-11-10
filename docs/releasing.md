@@ -43,12 +43,12 @@ read-only, and repeats verification on the actual packaged app with a minimal
 PATH. Both the app and disk image must pass Gatekeeper. The DMG includes an
 Applications shortcut and license notices.
 
-The build also creates a source archive from the exact commit, SHA-256 checksums,
-source directions, and a manifest recording the commit and signing state.
-Publishing checks that the tree remains clean, all hashes still match, and
-`HEAD` equals live `origin/main`. It rejects unsigned builds and conflicting
-tags, verifies the DMG again, uploads all assets into a draft, and only then
-publishes it as latest. If upload fails, inspect the draft with `gh release
+The build also creates a local source archive from the exact commit, SHA-256
+checksums, source directions, and a manifest recording the commit and signing
+state. Publishing checks that the tree remains clean, all hashes still match,
+and `HEAD` equals live `origin/main`. It rejects unsigned builds and conflicting
+tags, verifies the DMG again, uploads only the DMG into a draft, and then
+publishes it as latest. GitHub also provides automatic source archives. If upload fails, inspect the draft with `gh release
 view vVERSION` and finish or delete that draft deliberately before retrying.
 
 The GitHub Actions workflow runs tests, the history scan, website checks, and an

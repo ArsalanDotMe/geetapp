@@ -193,10 +193,10 @@ def publish(args):
     assert not existing or existing.split()[0] == commit, "The remote tag points to another commit"
     verify_dmg(output / "geet-apple-silicon.dmg")
     notes = output / "release-notes.md"
-    notes.write_text(f"geet {args.version} for Apple silicon Macs running macOS 26 or later.\n\nDownload **geet-apple-silicon.dmg**, open it, and drag geet to Applications. The app and DMG are Developer ID signed, notarized by Apple, and stapled.\n\nStreaming and Discover are available without an account.\n\nChecksums are in SHA256SUMS. geet's source is MIT licensed; bundled tools retain their own licenses. See the attached THIRD_PARTY_NOTICES.md and SOURCES.md for their licenses and corresponding source downloads.\n\nSource commit: {commit}\n")
+    notes.write_text(f"geet {args.version} for Apple silicon Macs running macOS 26 or later.\n\nDownload **geet-apple-silicon.dmg**, open it, and drag geet to Applications. The app and DMG are Developer ID signed, notarized by Apple, and stapled.\n\nStreaming and Discover are available without an account.\n\ngeet's source is MIT licensed; bundled tools retain their own licenses. Third-party notices and source directions are included in the DMG.\n\nSource commit: {commit}\n")
     # A draft keeps the installer hidden until every asset has uploaded.
     run("gh", "release", "create", tag, "--repo", REPO, "--target", commit, "--draft", "--title", "geet " + args.version, "--notes-file", notes,
-        *[output / name for name in manifest["sha256"]], output / "SHA256SUMS", output / "release.json")
+        output / "geet-apple-silicon.dmg")
     run("gh", "release", "edit", tag, "--repo", REPO, "--draft=false", "--latest")
 
 
