@@ -212,7 +212,14 @@ final class Player: ObservableObject {
                     if !stream.isHLS && !stream.track.isLive {
                         let key = MediaCache.key(trackID: track.id, formatID: stream.formatID)
                         let resource = AudioStreamServer(cache: cache, key: key, stream: stream, retaining: automaticCache && offlineEnabled)
-                        server = resource; item = AVPlayerItem(url: try await resource.start())
+                        server = resource
+                        do { item = AVPlayerItem(url: try await resource.start()) }
+                        catch YouTubeFailure.audioRejected where !recoveryAttempt {
+                            try Task.checkCancellation()
+                            guard generation == token else { return }
+                            load(track, at: position, recoveryAttempt: true)
+                            return
+                        }
                     } else {
                         let asset = AVURLAsset(url: stream.url, options: ["AVURLAssetHTTPHeaderFieldsKey": stream.headers])
                         item = AVPlayerItem(asset: asset)
