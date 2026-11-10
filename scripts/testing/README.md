@@ -32,7 +32,7 @@ build/geet-ax PID click transport-play 0.88 0.5
 build/geet-ax PID snapshot
 ```
 
-Use `right-click geet-status-item` while audio is playing to pause it, then right-click again to resume the same feed. An ordinary `click geet-status-item` must still open and close the panel; Control-click opens the Quit menu.
+Double-click the menu bar icon while audio is playing to pause it, then double-click again to resume the same feed. A single click must still open and close the panel; right-click and Control-click open the Quit menu.
 
 For a first-click regression check, use an isolated library and test the center and four cardinal edges of the Library hero, Library row, track-view and transport play controls. Confirm the action changes to loading, playing, or paused after each individual click. Also check Discover play/add and cancellation, Back, search, add/close, playlist menus, queue, previous/next, shuffle/repeat, volume/mute, and Settings navigation. A disabled control should remain disabled. Reopen the panel and repeat playback checks after a fresh launch. Do not treat a successful Accessibility `press` as a mouse pass.
 

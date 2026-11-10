@@ -30,6 +30,7 @@ enum GeetMain {
 final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var status: NSStatusItem!
     private let popover = NSPopover()
+    private var pendingClick: DispatchWorkItem?
     private var store: AppStore!
     #if DEBUG
     private var captureSignal: DispatchSourceSignal?
@@ -174,10 +175,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         #endif
     }
     @objc private func toggle() {
-        if NSApp.currentEvent?.type == .rightMouseUp {
-            store.player.toggle()
-        } else if NSApp.currentEvent?.modifierFlags.contains(.control) == true,
-                  let button = status.button {
+        let event = NSApp.currentEvent
+        if event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true {
+            pendingClick?.cancel()
+            guard let button = status.button else { return }
             if popover.isShown { popover.performClose(nil) }
             let menu = NSMenu()
             let quit = NSMenuItem(title: "Quit geet", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -186,10 +187,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             status.menu = menu
             button.performClick(nil)
             status.menu = nil
-        } else if popover.isShown {
-            popover.performClose(nil)
-        } else {
-            show()
+        } else if event?.clickCount == 2 {
+            pendingClick?.cancel()
+            store.player.toggle()
+        } else if (event?.clickCount ?? 0) <= 1 {
+            pendingClick?.cancel()
+            let click = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                if self.popover.isShown { self.popover.performClose(nil) } else { self.show() }
+            }
+            pendingClick = click
+            DispatchQueue.main.asyncAfter(deadline: .now() + NSEvent.doubleClickInterval, execute: click)
         }
     }
     private func installMenu() {
