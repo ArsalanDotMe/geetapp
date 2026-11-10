@@ -176,7 +176,7 @@ final class Player: ObservableObject {
         publishNowPlaying()
     }
 
-    private func load(_ track: Track, at offset: Double, recoveryAttempt: Bool = false) {
+    private func load(_ track: Track, at offset: Double, recoveryAttempt: Bool = false, alternateClient: Bool = false) {
         if enablesMediaCommands && commands.isEmpty { installMediaCommands() }
         resolveTask?.cancel(); cancelIdleDeadline()
         // Keep a matching look-ahead alive when Next arrives during extraction.
@@ -205,14 +205,21 @@ final class Player: ObservableObject {
                     try Task.checkCancellation()
                     let stream: ResolvedStream
                     if let prefetched, prefetched.isValid { stream = prefetched }
-                    else { stream = try await resolver.resolve(track, fresh: recoveryAttempt) }
+                    else { stream = try await resolver.resolve(track, fresh: recoveryAttempt, alternateClient: alternateClient) }
                     try Task.checkCancellation()
                     guard generation == token else { return }
                     self.track = stream.track; duration = stream.track.duration ?? duration
                     if !stream.isHLS && !stream.track.isLive {
                         let key = MediaCache.key(trackID: track.id, formatID: stream.formatID)
                         let resource = AudioStreamServer(cache: cache, key: key, stream: stream, retaining: automaticCache && offlineEnabled)
-                        server = resource; item = AVPlayerItem(url: try await resource.start())
+                        server = resource
+                        do { item = AVPlayerItem(url: try await resource.start()) }
+                        catch YouTubeFailure.audioRejected where !recoveryAttempt {
+                            try Task.checkCancellation()
+                            guard generation == token else { return }
+                            load(track, at: position, recoveryAttempt: true, alternateClient: true)
+                            return
+                        }
                     } else {
                         let asset = AVURLAsset(url: stream.url, options: ["AVURLAssetHTTPHeaderFieldsKey": stream.headers])
                         item = AVPlayerItem(asset: asset)

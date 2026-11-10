@@ -12,7 +12,7 @@ public enum ListenerMessage {
         if let youtube = error as? YouTubeFailure {
             switch youtube {
             case .unreadableResponse: return "YouTube sent a response geet couldn't read. Choose Check again in Settings, then retry the link."
-            case .audioRejected: return "YouTube refused this audio stream. Choose Check again in Settings, then retry or try another link."
+            case .audioRejected: return "YouTube refused this audio stream. Try again later or try another link."
             case .rateLimited: return "YouTube is limiting requests. Wait a few minutes, then try again."
             case .temporarilyUnavailable: return "YouTube isn't responding right now. Try again in a few minutes."
             }
