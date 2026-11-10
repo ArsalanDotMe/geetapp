@@ -28,13 +28,13 @@ class Check(HTMLParser):
 
 check = Check()
 check.feed((SITE / 'index.html').read_text())
-assert check.downloads == 2 and check.github == 2
+assert check.downloads == 1 and check.github == 2
 assert 'Public download coming soon' not in (SITE / 'index.html').read_text()
 destination = SITE / 'dist'
 if destination.exists():
     shutil.rmtree(destination)
 destination.mkdir()
-for name in ('index.html', 'styles.css', '_headers'):
+for name in ('index.html', 'styles.css', 'features.js', '_headers'):
     shutil.copy(SITE / name, destination / name)
 shutil.copytree(SITE / 'assets', destination / 'assets')
 print(f'Website ready: {destination}')

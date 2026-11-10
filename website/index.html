@@ -9,13 +9,15 @@
   <link rel="icon" href="assets/listener.svg" type="image/svg+xml">
   <link rel="preload" href="assets/Newsreader.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="styles.css">
+  <script src="assets/vendor/siriwave-2.4.0.min.js" defer></script>
+  <script src="features.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header wrap">
     <a class="wordmark" href="#" aria-label="geet home">geet</a>
     <nav aria-label="Main navigation">
-      <a href="#the-app">The app</a><a href="#discover">Discover</a><a href="#questions">Questions</a>
+      <a href="#your-playlists">Playlists</a><a href="#discover">Discover</a><a href="#questions">Questions</a>
       <a class="source-link" href="https://github.com/ArsalanDotMe/geetapp" aria-label="geet source on GitHub">GitHub <span aria-hidden="true">↗</span></a>
     </nav>
   </header>
@@ -23,9 +25,8 @@
     <section class="hero wrap" aria-labelledby="hero-title">
       <div class="hero-copy">
         <h1 id="hero-title">Background music.<br><span class="headline-line">Made for your Mac.</span></h1>
-        <p>A native macOS menu bar player for playlists, long mixes, and live radio. Listen in the background, without ads.</p>
+        <p>A native macOS menu bar player for playlists, mixes, and live radio. Listen in the background, without ads.</p>
         <a class="button" href="https://github.com/ArsalanDotMe/geetapp/releases/latest/download/geet-apple-silicon.dmg"><span class="apple-logo" aria-hidden="true"></span>Download</a>
-        <p class="compatibility">For macOS 26 and later · Apple Silicon</p>
       </div>
       <div class="hero-art" role="img" aria-label="The Listener, geet’s headphone-wearing portrait">
         <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
@@ -33,23 +34,17 @@
       </div>
     </section>
 
-    <section class="native-section wrap" id="the-app" aria-labelledby="native-title">
-      <div class="native-stage">
-        <div class="desktop-bar" aria-hidden="true"><span class="apple-logo"></span><span>Finder</span><span>File</span><span>Edit</span><span>View</span><span class="menu-listener"></span></div>
-        <div class="native-copy">
-          <h2 id="native-title">Your soundtrack.<br>Out of your way.</h2>
-          <p>Start a playlist, close the panel, and carry on. geet keeps playing in the background, one click away in your menu bar.</p>
-          <p>Pause or skip with your Mac’s media keys. Come back to your mix right where you left it.</p>
-        </div>
-        <picture class="library-capture">
-          <source media="(prefers-color-scheme: dark)" srcset="assets/library-dark.webp">
-          <img src="assets/library-light.webp" alt="geet’s native macOS library, with playlists and playback controls" width="760" height="1255" loading="lazy">
-        </picture>
+    <section class="feature-section playlist-section wrap" id="your-playlists" aria-labelledby="playlist-title">
+      <div class="feature-copy">
+        <h2 id="playlist-title">Add your<br>own playlists.</h2>
+        <p>Already have something you love listening to? Paste a YouTube link into geet and add it to your library.</p>
+        <p>Bring your playlists, mixes, and live radio together. Your next listen is always close by.</p>
       </div>
-      <div class="formats" aria-label="Supported listening formats">
-        <div><h3>Playlists</h3><p>Your favourites, all together.</p></div>
-        <div><h3>Mixes</h3><p>Long listens. Pick up where you left off.</p></div>
-        <div><h3>Live radio</h3><p>Press play and let the station take over.</p></div>
+      <div class="playlist-visual">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="assets/add-dark.webp">
+          <img src="assets/add-light.webp" alt="The Add your music panel in geet, with a field for a YouTube playlist, mix, or live radio link" width="952" height="1572" loading="lazy">
+        </picture>
       </div>
     </section>
 
@@ -67,15 +62,29 @@
       </div>
     </section>
 
-    <section class="efficiency-section wrap" aria-labelledby="efficiency-title">
-      <div class="efficiency-heading">
-        <h2 id="efficiency-title">Light on your Mac.<br>Long on listening.</h2>
-        <p>Designed to keep resource use and battery impact low. Built for the music you leave on, without the ad breaks.</p>
+    <section class="feature-section media-section wrap" id="media-keys" aria-labelledby="media-title">
+      <div class="media-visual" data-motion-scene>
+        <div class="keyboard-demo" role="img" aria-label="Mac media keys: F7 goes back, F8 plays or pauses, and F9 skips to the next track">
+          <div class="keycap key-previous"><span>F7</span><svg viewBox="0 0 64 44" aria-hidden="true"><g transform="translate(64 0) scale(-1 1)"><path d="M6 8v28l20-14zM27 8v28l20-14z"/><rect x="49" y="8" width="5" height="28" rx="1"/></g></svg></div>
+          <div class="keycap key-toggle"><span>F8</span><svg viewBox="0 0 64 44" aria-hidden="true"><path d="M7 7v30l23-15z"/><rect x="38" y="7" width="6" height="30" rx="1"/><rect x="50" y="7" width="6" height="30" rx="1"/></svg></div>
+          <div class="keycap key-next"><span>F9</span><svg viewBox="0 0 64 44" aria-hidden="true"><path d="M6 8v28l20-14zM27 8v28l20-14z"/><rect x="49" y="8" width="5" height="28" rx="1"/></svg></div>
+        </div>
       </div>
-      <div class="efficiency-grid">
-        <article><h3>Just the audio.</h3><p>Listen without keeping a video player or browser tab running alongside your work.</p></article>
-        <article><h3>Quiet in the background.</h3><p>A lightweight native app, designed to keep resource use and battery impact low through long listening sessions.</p></article>
-        <article><h3>No ad breaks.</h3><p>Let a playlist run or settle into a long mix. Your background music stays uninterrupted by ads.</p></article>
+      <div class="feature-copy">
+        <h2 id="media-title">Play. Pause. Skip.</h2>
+        <p>Your Mac’s media keys work with geet. Pause when someone needs you, skip a track, then get back to what you were doing.</p>
+        <p>No need to open the player or switch apps.</p>
+      </div>
+    </section>
+
+    <section class="feature-section adfree-section wrap" id="ad-free" aria-labelledby="adfree-title">
+      <div class="feature-copy">
+        <h2 id="adfree-title">Ad-free listening.</h2>
+        <p>Settle into a playlist or a mix without an ad breaking your concentration.</p>
+        <p>Just press play and let the music run.</p>
+      </div>
+      <div class="audio-visual" data-motion-scene role="img" aria-label="A continuous audio waveform representing music without ad breaks">
+        <div class="audio-wave" aria-hidden="true"><svg class="wave-fallback" viewBox="0 0 640 200" preserveAspectRatio="none"><path d="M0 100 C120 100 130 100 190 100 S240 40 290 78 S340 160 390 116 S450 100 640 100"/><path d="M0 100 C120 100 150 100 200 100 S260 140 300 110 S350 50 400 90 S470 100 640 100"/><path d="M0 100 C130 100 160 100 210 100 S270 70 310 94 S350 130 400 104 S470 100 640 100"/></svg></div>
       </div>
     </section>
 
@@ -83,20 +92,13 @@
       <h2 id="questions-title">A few things<br>to know.</h2>
       <div class="question-list">
         <details><summary>What Mac do I need?<span aria-hidden="true">+</span></summary><p>geet requires macOS 26 or later. It’s currently tested on Apple Silicon. Intel Macs haven’t been validated yet.</p></details>
-        <details><summary>Can I add my own music links?<span aria-hidden="true">+</span></summary><p>Yes. Add a public or unlisted YouTube playlist or video, including long mixes and live radio. Private playlists aren’t supported.</p></details>
+        <details><summary>Can I add my own music links?<span aria-hidden="true">+</span></summary><p>Yes. Add a public or unlisted YouTube playlist or video, including mixes and live radio. Private playlists aren’t supported.</p></details>
         <details><summary>How does Discover stay fresh?<span aria-hidden="true">+</span></summary><p>The curated selection is updated frequently. Open Discover and refresh to find the latest playlists, mixes, and radio stations, without updating the app.</p></details>
         <details><summary>Do I need an account?<span aria-hidden="true">+</span></summary><p>No. There’s no geet account or YouTube sign-in. Your library stays on your Mac, and geet has no analytics.</p></details>
       </div>
     </section>
 
-    <section class="closing wrap" id="download" aria-labelledby="closing-title">
-      <div class="closing-listener" aria-hidden="true"></div>
-      <h2 id="closing-title">Put something on.<br>Back to your day.</h2>
-      <a class="button" href="https://github.com/ArsalanDotMe/geetapp/releases/latest/download/geet-apple-silicon.dmg"><span class="apple-logo" aria-hidden="true"></span>Download</a>
-      <p class="compatibility">For macOS 26 and later · Apple Silicon</p>
-      <p class="download-note">Free and open source. <a href="https://github.com/ArsalanDotMe/geetapp/releases/latest">Release notes</a></p>
-    </section>
   </main>
-  <footer class="wrap"><a class="wordmark" href="#" aria-label="geet home">geet</a><p>Background music. Made for your Mac.</p><a href="https://github.com/ArsalanDotMe/geetapp" aria-label="geet source on GitHub">GitHub <span aria-hidden="true">↗</span></a></footer>
+  <footer class="wrap"><a class="wordmark" href="#" aria-label="geet home">geet</a><p>geet is a project of <a href="https://mashaltech.ee/">Mashal Tech</a>.</p><a href="https://github.com/ArsalanDotMe/geetapp" aria-label="geet source on GitHub">GitHub <span aria-hidden="true">↗</span></a></footer>
 </body>
 </html>
