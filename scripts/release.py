@@ -145,7 +145,9 @@ def create_dmg(app, dmg):
         "format": "UDZO",
         "files": [str(app)],
         "symlinks": {"Applications": "/Applications"},
-        "hide_extensions": ["Geet.app"],
+        # SetFile's hidden-extension flag adds FinderInfo to the signed app
+        # and breaks strict code-signature verification. Finder displays the
+        # bundle's lowercase name without modifying the signed bundle.
         "background": str(ROOT / "scripts/assets/dmg-background.png"),
         "window_rect": ((200, 200), DMG_WINDOW_SIZE),
         "default_view": "icon-view",
