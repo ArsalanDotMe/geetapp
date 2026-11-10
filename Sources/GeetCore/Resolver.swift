@@ -157,7 +157,7 @@ public actor Resolver {
         }
     }
 
-    public func resolve(_ track: Track, priority: ResolvePriority = .foreground, fresh: Bool = false) async throws -> ResolvedStream {
+    public func resolve(_ track: Track, priority: ResolvePriority = .foreground, fresh: Bool = false, alternateClient: Bool = false) async throws -> ResolvedStream {
         if !fresh, let stream = streams[track.id], stream.isValid { return stream }
         if let pending = pendingStreams[track.id] {
             if priority == .foreground && pending.1 == .background {
@@ -165,19 +165,21 @@ public actor Resolver {
             } else { return try await pending.2.value }
         }
         let id = UUID()
-        let task = Task { try await self.performResolve(track, priority: priority, fresh: fresh) }
+        let task = Task { try await self.performResolve(track, priority: priority, fresh: fresh, alternateClient: alternateClient) }
         pendingStreams[track.id] = (id, priority, task)
         defer { if pendingStreams[track.id]?.0 == id { pendingStreams.removeValue(forKey: track.id) } }
         return try await withTaskCancellationHandler(operation: { try await task.value }, onCancel: { task.cancel() })
     }
-    private func performResolve(_ track: Track, priority: ResolvePriority, fresh: Bool) async throws -> ResolvedStream {
+    private func performResolve(_ track: Track, priority: ResolvePriority, fresh: Bool, alternateClient: Bool) async throws -> ResolvedStream {
         if !fresh, let stream = streams[track.id], stream.isValid { return stream }
         try checkFailure(track.id)
         do {
             let exe = try await executable(priority: priority)
             // HLS live streams may expose muxed renditions only. AVPlayer consumes them
             // without a video layer; prefer the lowest-bandwidth native HLS fallback.
-            let data = try await extract(exe, arguments: baseArguments() + ["--no-playlist", "-f", Self.audioFormat, "--dump-single-json", "--", track.url.absoluteString], priority: priority,
+            // shortcut: visionos availability can change, remove this fallback when yt-dlp handles these 403s.
+            let client = alternateClient ? ["--extractor-args", "youtube:player_client=visionos"] : []
+            let data = try await extract(exe, arguments: baseArguments() + client + ["--no-playlist", "-f", Self.audioFormat, "--dump-single-json", "--", track.url.absoluteString], priority: priority,
                                          validate: { _ = try Self.parseStream($0, fallback: track) })
             let result = try Self.parseStream(data, fallback: track)
             try Task.checkCancellation()

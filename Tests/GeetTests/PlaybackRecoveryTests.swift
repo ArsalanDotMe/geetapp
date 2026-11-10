@@ -29,7 +29,9 @@ private final class RecoveryAudioProtocol: URLProtocol, @unchecked Sendable {
         let endpoint = rejectFresh ? "rejected" : "fresh"
         let script = """
         #!/bin/sh
-        if [ "$2" = "--version" ]; then echo 2026.10; else echo '{"id":"xyEpFjZ_uiE","title":"Test","url":"https://recovery.geet.test/\(endpoint)","format_id":"140","protocol":"https"}'; fi
+        if [ "$2" = "--version" ]; then echo 2026.10
+        elif printf '%s\\n' "$@" | grep -qx 'youtube:player_client=visionos'; then echo '{"id":"xyEpFjZ_uiE","title":"Test","url":"https://recovery.geet.test/\(endpoint)","format_id":"140","protocol":"https"}'
+        else exit 1; fi
         """
         try script.write(to: executable, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
